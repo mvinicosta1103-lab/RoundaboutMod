@@ -13,9 +13,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class StickyFingersBaseRenderer<M extends StandEntity> extends StandRenderer<StickyFingersEntity>{
 
-    //TEMPORARY: uses the King Crimson texture until a Sticky Fingers texture exists.
-    //To swap later, drop the new texture in textures/stand/sticky_fingers/ and point this at it.
-    private static final ResourceLocation BASE_SKIN = new ResourceLocation(Roundabout.MOD_ID,"textures/stand/king_crimson/red.png");
+    private static final ResourceLocation BASE_SKIN = new ResourceLocation(Roundabout.MOD_ID,"textures/stand/sticky_fingers/part_5.png");
 
     public StickyFingersBaseRenderer(EntityRendererProvider.Context context, StandModel root) {
         super(context, root,0f);

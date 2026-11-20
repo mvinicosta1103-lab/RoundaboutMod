@@ -3142,7 +3142,9 @@
   "skins.roundabout.bad_company.sand": "Sand",
 
   "skins.roundabout.king_crimson.base": "Part 5",
-  "skins.roundabout.sticky_fingers.base": "Base",
+  "skins.roundabout.sticky_fingers.base": "Part 5",
+  "skins.roundabout.sticky_fingers.manga": "Manga",
+  "skins.roundabout.sticky_fingers.black_and_white": "Black and White",
   "entity.roundabout.zipper": "Zipper",
   "block.roundabout.zipper_space": "Zipper Space",
   "roundabout.zipper.no_griefing": "Stand griefing is disabled, so the wall cannot be unzipped.",
