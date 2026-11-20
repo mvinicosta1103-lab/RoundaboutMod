@@ -87,6 +87,7 @@ public class ClientForgeEvents {
     }
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(ForgeEntities.ZIPPER.get(), ZipperRenderer::new);
         event.registerEntityRenderer(ForgeEntities.TERRIER_DOG.get(), TerrierEntityRenderer::new);
         event.registerEntityRenderer(ForgeEntities.FALCON.get(), FalconRenderer::new);
         event.registerEntityRenderer(ForgeEntities.SNAKE.get(), SnakeRenderer::new);
@@ -587,9 +588,9 @@ public class ClientForgeEvents {
     }
     @SubscribeEvent
     public static void registerParticleStuff(RegisterParticleProvidersEvent event) {
+        event.registerSpriteSet(ForgeParticles.ZIPPER_SPARK.get(), ZipperSparkParticle.Provider::new);
         event.registerSpriteSet(ForgeParticles.HIT_IMPACT.get(), ExplodeParticle.Provider::new);
-        event.registerSpriteSet(ForgeParticles.HALLUCINATORY_ACID_DRIP.get(),
-                HallucinatoryAcidDripParticle.Provider::new);
+        event.registerSpriteSet(ForgeParticles.HALLUCINATORY_ACID_DRIP.get(), HallucinatoryAcidDripParticle.Provider::new);
         event.registerSpriteSet(ForgeParticles.PUNCH_IMPACT_A.get(), PunchImpactParticle.Provider::new);
         event.registerSpriteSet(ForgeParticles.PUNCH_IMPACT_B.get(), PunchImpactParticle.Provider::new);
         event.registerSpriteSet(ForgeParticles.PUNCH_IMPACT_C.get(), PunchImpactParticle.Provider::new);

@@ -889,6 +889,14 @@ public class ForgeEntities {
                             .updateInterval(1).
                             build(new ResourceLocation(Roundabout.MOD_ID, "block_d4c_entity").toString())
             );
+    public static final RegistryObject<EntityType<ZipperEntity>> ZIPPER =
+            ENTITY_TYPES.register("zipper", () ->
+                    EntityType.Builder.<ZipperEntity>of(ZipperEntity::new, MobCategory.MISC)
+                            .sized(0.9F, 2.0F).
+                            clientTrackingRange(10)
+                            .updateInterval(1).
+                            build(new ResourceLocation(Roundabout.MOD_ID, "zipper").toString())
+            );
     public static final RegistryObject<EntityType<FallingBannerEntity>> FALLING_BANNER =
             ENTITY_TYPES.register("falling_banner", () ->
                     EntityType.Builder.<FallingBannerEntity>of(FallingBannerEntity::new, MobCategory.MISC)

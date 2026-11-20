@@ -398,6 +398,8 @@ public class ForgeBlocks {
             () -> ModBlocks.DIVER_LIMB_BLOCK_PROPERTIES);
     public static final RegistryObject<Block> SC_RAPIER_PLATFORM = BLOCKS.register("sc_rapier_platform",
             () -> ModBlocks.SC_RAPIER_PLATFORM_BLOCK_PROPERTIES);
+    public static final RegistryObject<Block> ZIPPER_SPACE = BLOCKS.register("zipper_space",
+            () -> ModBlocks.ZIPPER_SPACE_BLOCK_PROPERTIES);
     public static final RegistryObject<Block> GE_BUSH = BLOCKS.register("ge_bush",
             () -> ModBlocks.GE_BUSH_BLOCK_PROPERTIES);
     public static final RegistryObject<Block> GE_VINE = BLOCKS.register("ge_vine",
@@ -485,6 +487,8 @@ public class ForgeBlocks {
             () -> BlockEntityType.Builder.of(BubbleScaffoldBlockEntity::new, BUBBLE_SCAFFOLD.get()).build(Util.fetchChoiceType(References.BLOCK_ENTITY, "block_scaffold")));
     public static final RegistryObject<BlockEntityType<DiverLimbBlockEntity>> DIVER_LIMB_BLOCK_ENTITY = BLOCK_ENTITIES.register("diver_limb",
             () -> BlockEntityType.Builder.of(DiverLimbBlockEntity::new, DIVER_LIMB.get()).build(Util.fetchChoiceType(References.BLOCK_ENTITY, "diver_limb")));
+    public static final RegistryObject<BlockEntityType<ZipperSpaceBlockEntity>> ZIPPER_SPACE_BLOCK_ENTITY = BLOCK_ENTITIES.register("zipper_space",
+            () -> BlockEntityType.Builder.of(ZipperSpaceBlockEntity::new, ZIPPER_SPACE.get()).build(Util.fetchChoiceType(References.BLOCK_ENTITY, "zipper_space")));
     public static final RegistryObject<BlockEntityType<SilverChariotRapierPlatformBlockEntity>> SC_RAPIER_PLATFORM_BLOCK_ENTITY = BLOCK_ENTITIES.register("sc_rapier_platform",
             () -> BlockEntityType.Builder.of(SilverChariotRapierPlatformBlockEntity::new, SC_RAPIER_PLATFORM.get()).build(Util.fetchChoiceType(References.BLOCK_ENTITY, "sc_rapier_platform")));
     public static final RegistryObject<BlockEntityType<GEBushBlockEntity>> GE_BUSH_BLOCK_ENTITY = BLOCK_ENTITIES.register("ge_bush",

@@ -377,6 +377,8 @@ public class ForgeEvents {
         ModBlocks.BUBBLE_SCAFFOLD = ForgeBlocks.BUBBLE_SCAFFOLD.get();
         ModBlocks.DIVER_LIMB = ForgeBlocks.DIVER_LIMB.get();
         ModBlocks.SC_RAPIER_PLATFORM = ForgeBlocks.SC_RAPIER_PLATFORM.get();
+        ModBlocks.ZIPPER_SPACE_BLOCK_ENTITY = ForgeBlocks.ZIPPER_SPACE_BLOCK_ENTITY.get();
+        ModBlocks.ZIPPER_SPACE = ForgeBlocks.ZIPPER_SPACE.get();
         ModBlocks.GE_BUSH = ForgeBlocks.GE_BUSH.get();
         ModBlocks.GE_VINE = ForgeBlocks.GE_VINE.get();
         ModBlocks.OASIS_MUD_BLOCK = ForgeBlocks.OASIS_MUD_BLOCK.get();
@@ -839,7 +841,7 @@ public class ForgeEvents {
         BrewingRecipeRegistry.addRecipe(new ForgeBrewingRecipes(ForgeItems.HEX_POTION.get(), Items.REDSTONE, ForgeItems.HEX_POTION_EXTENDED.get()));
         BrewingRecipeRegistry.addRecipe(new ForgeBrewingRecipes(ForgeItems.HEX_POTION.get(), Items.GLOWSTONE_DUST, ForgeItems.HEX_POTION_STRONG.get()));
 
-
+        ModParticles.ZIPPER_SPARK = ForgeParticles.ZIPPER_SPARK.get();
         ModParticles.HIT_IMPACT = ForgeParticles.HIT_IMPACT.get();
         ModParticles.MELTING = ForgeParticles.MELTING.get();
         ModParticles.BLOOD = ForgeParticles.BLOOD.get();
@@ -1000,7 +1002,7 @@ public class ForgeEvents {
         ModEntities.THE_WORLD = ForgeEntities.THE_WORLD.get();
         ModEntities.THE_WORLD_ULTIMATE = ForgeEntities.THE_WORLD_ULTIMATE.get();
         ModEntities.KING_CRIMSON = ForgeEntities.KING_CRIMSON.get();
-        ModEntities.STICKY_FINGERS = ForgeEntities.STICKY_FINGERS.get();
+        ModEntities.ZIPPER = ForgeEntities.ZIPPER.get();
         ModEntities.WHITESNAKE = ForgeEntities.WHITESNAKE.get();
         ModEntities.HALLUCINATORY_ACID_PROJECTILE = ForgeEntities.HALLUCINATORY_ACID_PROJECTILE.get();
         ModEntities.D4C = ForgeEntities.D4C.get();
