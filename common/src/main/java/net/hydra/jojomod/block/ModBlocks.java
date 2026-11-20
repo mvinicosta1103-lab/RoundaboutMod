@@ -141,6 +141,7 @@ public class ModBlocks {
 
     public static Block MINING_ALERT_BLOCK;
     public static Block BUBBLE_SCAFFOLD;
+    public static Block ZIPPER_SPACE;
     public static Block DIVER_LIMB;
     public static Block SC_RAPIER_PLATFORM;
     public static Block GE_BUSH;
@@ -247,6 +248,7 @@ public class ModBlocks {
     public static BlockEntityType<FancyLighterBlockEntity> FANCY_LIGHTER_BLOCK_ENTITY;
     public static BlockEntityType<MirrorBlockEntity> MIRROR_BLOCK_ENTITY;
     public static BlockEntityType<BubbleScaffoldBlockEntity> BUBBLE_SCAFFOLD_BLOCK_ENTITY;
+    public static BlockEntityType<ZipperSpaceBlockEntity> ZIPPER_SPACE_BLOCK_ENTITY;
     public static BlockEntityType<DiverLimbBlockEntity> DIVER_LIMB_BLOCK_ENTITY;
     public static BlockEntityType<SilverChariotRapierPlatformBlockEntity> SC_RAPIER_PLATFORM_BLOCK_ENTITY;
     public static BlockEntityType<GEBushBlockEntity> GE_BUSH_BLOCK_ENTITY;
@@ -885,6 +887,11 @@ public class ModBlocks {
             BlockBehaviour.Properties.of().mapColor(MapColor.FIRE).noCollission().dynamicShape().speedFactor(0.7F).replaceable().instabreak().lightLevel((p_152607_) -> {
                 return 1;
             }).noParticlesOnBreak().pushReaction(PushReaction.DESTROY).sound(SoundType.EMPTY));
+    /**Sticky Fingers: the invisible, walkable, unbreakable space left by an unzipped block*/
+    public static ZipperSpaceBlock ZIPPER_SPACE_BLOCK_PROPERTIES = new ZipperSpaceBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.NONE).noCollission().noOcclusion().strength(-1.0F, 3600000.0F)
+                    .noLootTable().isSuffocating((state, getter, pos) -> false).isViewBlocking((state, getter, pos) -> false)
+                    .pushReaction(PushReaction.BLOCK).sound(SoundType.EMPTY));
     //copying the bubble scaffold code for diver down's limb, but removing the speed reducer since the tradeoff is that you're only limited to 4, and it's only placable on walls/floor.
     public static DiverLimbBlock DIVER_LIMB_BLOCK_PROPERTIES = new DiverLimbBlock(
             BlockBehaviour.Properties.of().mapColor(MapColor.FIRE).noCollission().dynamicShape().instabreak().lightLevel((p_152607_) -> {

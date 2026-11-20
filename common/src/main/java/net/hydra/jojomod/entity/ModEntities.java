@@ -250,6 +250,7 @@ public class ModEntities {
     public static EntityType<BlockD4CEntity> D4C_BLOCK;
     public static EntityType<StepRuleEntity> STEP_RULE;
     public static EntityType<FallingBannerEntity> FALLING_BANNER;
+    public static EntityType<ZipperEntity> ZIPPER;
     public static EntityType<JJFProjectileEntity> JJF_PROJECTILE;
     public static EntityType<JJFGunpowderCloudEntity> JJF_GUNPOWDER_CLOUD;
     public static EntityType<JJFSpitEntity> JJF_SPIT;
