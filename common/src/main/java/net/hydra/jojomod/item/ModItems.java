@@ -44,6 +44,8 @@ public class ModItems {
 
     public static Item STAND_DISC_KING_CRIMSON;
     public static Item MAX_STAND_DISC_KING_CRIMSON;
+    public static Item STAND_DISC_STICKY_FINGERS;
+    public static Item MAX_STAND_DISC_STICKY_FINGERS;
 
     public static Item STAND_DISC_JJF;
     public static Item MAX_STAND_DISC_JJF;

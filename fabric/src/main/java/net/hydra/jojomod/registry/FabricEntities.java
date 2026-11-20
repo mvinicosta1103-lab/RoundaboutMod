@@ -400,6 +400,14 @@ public class FabricEntities {
                     EntityType.Builder.of(KingCrimsonEntity::new, MobCategory.MISC).
                             sized(0.75F, 2.05f).clientTrackingRange(14).build(Roundabout.MOD_ID+":king_crimson")
             );
+
+    public static final EntityType<StickyFingersEntity> STICKY_FINGERS =
+            Registry.register(
+                    BuiltInRegistries.ENTITY_TYPE,
+                    new ResourceLocation(Roundabout.MOD_ID, "sticky_fingers"),
+                    EntityType.Builder.of(StickyFingersEntity::new, MobCategory.MISC).
+                            sized(0.75F, 2.05f).clientTrackingRange(14).build(Roundabout.MOD_ID+":sticky_fingers")
+            );
     public static final EntityType<WhitesnakeEntity> WHITESNAKE = Registry.register(
             BuiltInRegistries.ENTITY_TYPE, Roundabout.location("whitesnake"),
             EntityType.Builder.of(WhitesnakeEntity::new, MobCategory.MISC)
@@ -1552,6 +1560,7 @@ public class FabricEntities {
                 /*Common Code Bridge*/
                 ModEntities.THE_WORLD = THE_WORLD;
                 ModEntities.KING_CRIMSON = KING_CRIMSON;
+                ModEntities.STICKY_FINGERS = STICKY_FINGERS;
                 ModEntities.WHITESNAKE = WHITESNAKE;
                 ModEntities.HALLUCINATORY_ACID_PROJECTILE = HALLUCINATORY_ACID_PROJECTILE;
                 ModEntities.D4C = D4C;
@@ -1831,6 +1840,7 @@ public class FabricEntities {
 
                 FabricDefaultAttributeRegistry.register(THE_WORLD, StandEntity.createStandAttributes());
         FabricDefaultAttributeRegistry.register(KING_CRIMSON, StandEntity.createStandAttributes());
+        FabricDefaultAttributeRegistry.register(STICKY_FINGERS, StandEntity.createStandAttributes());
         FabricDefaultAttributeRegistry.register(WHITESNAKE, StandEntity.createStandAttributes());
         FabricDefaultAttributeRegistry.register(D4C, StandEntity.createStandAttributes());
         FabricDefaultAttributeRegistry.register(KING_CRIMSON_REAPER, StandEntity.createStandAttributes());

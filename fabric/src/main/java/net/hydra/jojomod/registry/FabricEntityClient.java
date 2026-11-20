@@ -71,6 +71,7 @@ public class FabricEntityClient {
         EntityRendererRegistry.register(FabricEntities.THE_WORLD, TheWorldRenderer::new);
         EntityRendererRegistry.register(FabricEntities.THE_WORLD_ULTIMATE, TheWorldUltimateRenderer::new);
         EntityRendererRegistry.register(FabricEntities.KING_CRIMSON, KingCrimsonRenderer::new);
+        EntityRendererRegistry.register(FabricEntities.STICKY_FINGERS, StickyFingersRenderer::new);
         EntityRendererRegistry.register(FabricEntities.WHITESNAKE, WhitesnakeRenderer::new);
         EntityRendererRegistry.register(FabricEntities.HALLUCINATORY_ACID_PROJECTILE, HallucinatoryAcidProjectileRenderer::new);
         EntityRendererRegistry.register(FabricEntities.D4C, D4CRenderer::new);
@@ -293,6 +294,7 @@ public class FabricEntityClient {
         EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.BUTTERFLY_LAYER, ButterflyModel::createBodyLayer);
         EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.ANUBIS_GUARDIAN_LAYER, AnubisGuardianModel::createBodyLayer);
         EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.KING_CRIMSON_LAYER, KingCrimsonModel::getTexturedModelData);
+        EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.STICKY_FINGERS_LAYER, StickyFingersModel::getTexturedModelData);
         EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.WHITESNAKE_LAYER, WhitesnakeModel::getTexturedModelData);
         EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.HALLUCINATORY_ACID_PROJECTILE_LAYER, HallucinatoryAcidProjectileModel::createBodyLayer);
         EntityModelLayerRegistry.registerModelLayer(ModEntityRendererClient.D4C_LAYER, D4CModel::getTexturedModelData);

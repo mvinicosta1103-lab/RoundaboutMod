@@ -84,6 +84,10 @@ public class FabricItems {
             new StandDiscItem(new Item.Properties().stacksTo(1), new PowersKingCrimson(null)));
     public static Item MAX_STAND_DISC_KING_CRIMSON = registerItem("max_king_crimson_disc",
             new MaxStandDiscItem(new Item.Properties().stacksTo(1), new PowersKingCrimson(null)));
+    public static Item STAND_DISC_STICKY_FINGERS = registerItem("sticky_fingers_disc",
+            new StandDiscItem(new Item.Properties().stacksTo(1), new PowersStickyFingers(null)));
+    public static Item MAX_STAND_DISC_STICKY_FINGERS = registerItem("max_sticky_fingers_disc",
+            new MaxStandDiscItem(new Item.Properties().stacksTo(1), new PowersStickyFingers(null), (StandDiscItem) STAND_DISC_STICKY_FINGERS));
     public static final Item STAND_DISC_JJF = registerItem("jumpin_jack_flash_disc",
             new StandDiscItem(new Item.Properties().stacksTo(1), new PowersJumpinJackFlash(null)));
     public static final Item MAX_STAND_DISC_JJF = registerItem("max_jumpin_jack_flash_disc",
@@ -939,6 +943,8 @@ public class FabricItems {
                         entries.accept(STAND_DISC_20_CENTURY_BOY);
                         entries.accept(STAND_DISC_TUSK);
                         entries.accept(MAX_STAND_DISC_TUSK);
+                        entries.accept(STAND_DISC_STICKY_FINGERS);
+                        entries.accept(MAX_STAND_DISC_STICKY_FINGERS);
                         entries.accept(CHAMOMILE_SEEDS);
                         entries.accept(CHAMOMILE);
                         entries.accept(MINT_SEEDS);
@@ -1040,6 +1046,9 @@ public class FabricItems {
         ModItems.STAND_DISC_KING_CRIMSON = STAND_DISC_KING_CRIMSON;
         ((MaxStandDiscItem)MAX_STAND_DISC_KING_CRIMSON).baseDisc = ((StandDiscItem)STAND_DISC_KING_CRIMSON);
         ModItems.MAX_STAND_DISC_KING_CRIMSON = MAX_STAND_DISC_KING_CRIMSON;
+        ModItems.STAND_DISC_STICKY_FINGERS = STAND_DISC_STICKY_FINGERS;
+        ((MaxStandDiscItem)MAX_STAND_DISC_STICKY_FINGERS).baseDisc = ((StandDiscItem)STAND_DISC_STICKY_FINGERS);
+        ModItems.MAX_STAND_DISC_STICKY_FINGERS = MAX_STAND_DISC_STICKY_FINGERS;
         ModItems.STAND_DISC_JJF = STAND_DISC_JJF;
         ((MaxStandDiscItem)MAX_STAND_DISC_JJF).baseDisc = ((StandDiscItem)STAND_DISC_JJF);
         ModItems.MAX_STAND_DISC_JJF = MAX_STAND_DISC_JJF;

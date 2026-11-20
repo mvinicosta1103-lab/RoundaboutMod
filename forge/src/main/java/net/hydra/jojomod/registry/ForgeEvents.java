@@ -76,6 +76,7 @@ public class ForgeEvents {
         event.put(ForgeEntities.THE_WORLD.get(), StandEntity.createStandAttributes().build());
         event.put(ForgeEntities.THE_WORLD_ULTIMATE.get(), StandEntity.createStandAttributes().build());
         event.put(ForgeEntities.KING_CRIMSON.get(), StandEntity.createStandAttributes().build());
+        event.put(ForgeEntities.STICKY_FINGERS.get(), StandEntity.createStandAttributes().build());
         event.put(ForgeEntities.WHITESNAKE.get(), StandEntity.createStandAttributes().build());
         event.put(ForgeEntities.D4C.get(), StandEntity.createStandAttributes().build());
         event.put(ForgeEntities.KING_CRIMSON_REAPER.get(), StandEntity.createStandAttributes().build());
@@ -508,6 +509,9 @@ public class ForgeEvents {
         ModItems.STAND_DISC_KING_CRIMSON = ForgeItems.STAND_DISC_KING_CRIMSON.get();
         ((MaxStandDiscItem)ForgeItems.MAX_STAND_DISC_KING_CRIMSON.get()).baseDisc = ((StandDiscItem)ForgeItems.STAND_DISC_KING_CRIMSON.get());
         ModItems.MAX_STAND_DISC_KING_CRIMSON = ForgeItems.MAX_STAND_DISC_KING_CRIMSON.get();
+        ModItems.STAND_DISC_STICKY_FINGERS = ForgeItems.STAND_DISC_STICKY_FINGERS.get();
+        ((MaxStandDiscItem)ForgeItems.MAX_STAND_DISC_STICKY_FINGERS.get()).baseDisc = ((StandDiscItem)ForgeItems.STAND_DISC_STICKY_FINGERS.get());
+        ModItems.MAX_STAND_DISC_STICKY_FINGERS = ForgeItems.MAX_STAND_DISC_STICKY_FINGERS.get();
 
         ModItems.STAND_DISC_JJF = ForgeItems.STAND_DISC_JJF.get();
         ((MaxStandDiscItem)ForgeItems.MAX_STAND_DISC_JJF.get()).baseDisc = ((StandDiscItem)ForgeItems.STAND_DISC_JJF.get());
@@ -996,6 +1000,7 @@ public class ForgeEvents {
         ModEntities.THE_WORLD = ForgeEntities.THE_WORLD.get();
         ModEntities.THE_WORLD_ULTIMATE = ForgeEntities.THE_WORLD_ULTIMATE.get();
         ModEntities.KING_CRIMSON = ForgeEntities.KING_CRIMSON.get();
+        ModEntities.STICKY_FINGERS = ForgeEntities.STICKY_FINGERS.get();
         ModEntities.WHITESNAKE = ForgeEntities.WHITESNAKE.get();
         ModEntities.HALLUCINATORY_ACID_PROJECTILE = ForgeEntities.HALLUCINATORY_ACID_PROJECTILE.get();
         ModEntities.D4C = ForgeEntities.D4C.get();

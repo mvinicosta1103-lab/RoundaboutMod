@@ -206,6 +206,8 @@
   "item.roundabout.walking_heart_disc": "Stand Disc",
   "item.roundabout.king_crimson_disc": "Stand Disc",
   "item.roundabout.max_king_crimson_disc": "Stand Disc+",
+  "item.roundabout.sticky_fingers_disc": "Stand Disc",
+  "item.roundabout.max_sticky_fingers_disc": "Stand Disc+",
   "item.roundabout.max_walking_heart_disc": "Stand Disc+",
   "item.roundabout.max_star_platinum_disc": "Stand Disc+",
   "item.roundabout.max_oasis_disc": "Stand Disc+",
@@ -289,6 +291,7 @@
   "item.roundabout.california_king_bed_disc.desc": "California King Bed",
   "item.roundabout.california_king_bed_disc.desc.short": "CA King Bed",
   "item.roundabout.king_crimson_disc.desc": "King Crimson",
+  "item.roundabout.sticky_fingers_disc.desc": "Sticky Fingers",
   "item.roundabout.whitesnake_disc.desc": "Whitesnake",
   "item.roundabout.none_disc.desc": "None",
 
@@ -681,6 +684,7 @@
   "entity.roundabout.the_world": "The World",
   "entity.roundabout.iron_ball": "Iron Ball",
   "entity.roundabout.king_crimson": "King Crimson",
+  "entity.roundabout.sticky_fingers": "Sticky Fingers",
   "entity.roundabout.king_crimson_reaper": "King Crimson",
   "entity.roundabout.d4c_clone": "Player",
   "entity.roundabout.king_crimson_clone": "Player",
@@ -3138,6 +3142,7 @@
   "skins.roundabout.bad_company.sand": "Sand",
 
   "skins.roundabout.king_crimson.base": "Part 5",
+  "skins.roundabout.sticky_fingers.base": "Base",
   "skins.roundabout.king_crimson.manga": "Manga",
   "skins.roundabout.king_crimson.end": "King End",
   "skins.roundabout.king_crimson.end_2": "Ender",

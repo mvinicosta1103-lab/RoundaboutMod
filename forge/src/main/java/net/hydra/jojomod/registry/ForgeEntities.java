@@ -368,6 +368,12 @@ public class ForgeEntities {
                             clientTrackingRange(14).
                             build(new ResourceLocation(Roundabout.MOD_ID, "king_crimson").toString())
             );
+    public static final RegistryObject<EntityType<StickyFingersEntity>> STICKY_FINGERS =
+            ENTITY_TYPES.register("sticky_fingers", () ->
+                    EntityType.Builder.of(StickyFingersEntity::new, MobCategory.MISC).sized(0.75F, 2.05f).
+                            clientTrackingRange(14).
+                            build(new ResourceLocation(Roundabout.MOD_ID, "sticky_fingers").toString())
+            );
     public static final RegistryObject<EntityType<WhitesnakeEntity>> WHITESNAKE = ENTITY_TYPES.register(
             "whitesnake", () -> EntityType.Builder.of(WhitesnakeEntity::new, MobCategory.MISC)
                     .sized(0.6F, 1.8F).clientTrackingRange(14)

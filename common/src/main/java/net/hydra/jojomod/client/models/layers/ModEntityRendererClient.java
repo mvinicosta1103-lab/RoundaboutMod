@@ -36,6 +36,7 @@ public class ModEntityRendererClient {
     public static final ModelLayerLocation THE_WORLD_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "the_world"), "main");
     public static final ModelLayerLocation JUMPIN_JACK_FLASH_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "jumpin_jack_flash"), "main");
     public static final ModelLayerLocation KING_CRIMSON_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "king_crimson"), "main");
+    public static final ModelLayerLocation STICKY_FINGERS_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "sticky_fingers"), "main");
     public static final ModelLayerLocation WHITESNAKE_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "whitesnake"), "main");
     public static final ModelLayerLocation D4C_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "d4c"), "main");
     public static final ModelLayerLocation KING_CRIMSON_REAPER_LAYER = new ModelLayerLocation(new ResourceLocation(Roundabout.MOD_ID, "king_crimson_reaper"), "main");
