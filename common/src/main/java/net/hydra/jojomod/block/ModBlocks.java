@@ -887,7 +887,6 @@ public class ModBlocks {
             BlockBehaviour.Properties.of().mapColor(MapColor.FIRE).noCollission().dynamicShape().speedFactor(0.7F).replaceable().instabreak().lightLevel((p_152607_) -> {
                 return 1;
             }).noParticlesOnBreak().pushReaction(PushReaction.DESTROY).sound(SoundType.EMPTY));
-    /**Sticky Fingers: the invisible, walkable, unbreakable space left by an unzipped block*/
     public static ZipperSpaceBlock ZIPPER_SPACE_BLOCK_PROPERTIES = new ZipperSpaceBlock(
             BlockBehaviour.Properties.of().mapColor(MapColor.NONE).noCollission().noOcclusion().strength(-1.0F, 3600000.0F)
                     .noLootTable().isSuffocating((state, getter, pos) -> false).isViewBlocking((state, getter, pos) -> false)

@@ -12,7 +12,6 @@ import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**Draws the flying debris as a small spinning block.*/
 public class ZipperDebrisRenderer extends EntityRenderer<ZipperDebrisEntity> {
 
     public ZipperDebrisRenderer(EntityRendererProvider.Context context) {

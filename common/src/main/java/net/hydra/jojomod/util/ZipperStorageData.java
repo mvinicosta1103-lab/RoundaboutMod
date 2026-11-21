@@ -11,10 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**Sticky Fingers' zipper storage works like an Ender Chest: every player has ONE personal one row inventory,
- * and every zipper storage opens that same inventory, in any block and any dimension.
- * The items belong to the player, not to the zipper, so popping or losing a zipper never loses items.
- * Saved in the overworld's data storage.*/
 public class ZipperStorageData extends SavedData {
 
     public static final String ID = "roundabout_zipper_storage";
@@ -27,7 +23,6 @@ public class ZipperStorageData extends SavedData {
                 .computeIfAbsent(ZipperStorageData::load, ZipperStorageData::new, ID);
     }
 
-    /**The storage of this player (created empty the first time)*/
     public SimpleContainer getContainer(UUID player) {
         return storages.computeIfAbsent(player, id -> createContainer());
     }

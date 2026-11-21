@@ -1,6 +1,3 @@
-// Sticky Fingers model, generated from stickyfingers.bbmodel
-// Exported for Minecraft version 1.17+ for Yarn
-// Paste this class into your mod and generate all required imports
 package net.hydra.jojomod.client.models.stand;
 
 import net.hydra.jojomod.client.models.stand.animations.KingCrimsonAnimations;

@@ -19,9 +19,6 @@ import net.minecraft.util.Mth;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
-/**Draws the zipper of a Zipper Storage block. Same look as the {@link ZipperRenderer} (same texture, 4 cells:
- * opening | cloth | teeth | slider), but shorter, centered on the face of the block, and ONLY drawn for stand users
- * who are close to it. It unzips while somebody has the storage open.*/
 public class ZipperStorageRenderer extends EntityRenderer<ZipperStorageEntity> {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Roundabout.MOD_ID,
@@ -52,14 +49,12 @@ public class ZipperStorageRenderer extends EntityRenderer<ZipperStorageEntity> {
                 || entity.distanceToSqr(player) > VIEW_DISTANCE_SQR) {
             return;
         }
-        //the entity sits inside the block, so the light is read from the air in front of the zipper
         int light = LevelRenderer.getLightColor(entity.level(), entity.getFrontPos());
         float open = Mth.lerp(partialTicks, entity.getPrevOpenAnim(), entity.getOpenAnim());
         open = open * open * (3.0F - 2.0F * open);
 
         Direction face = entity.getFace();
         poseStack.pushPose();
-        //the entity's feet are half a hitbox below the middle of the zipper
         poseStack.translate(0.0D, ZipperStorageEntity.SIZE / 2.0D, 0.0D);
         if (face.getAxis() == Direction.Axis.Y) {
             poseStack.mulPose(Axis.XP.rotationDegrees(face == Direction.UP ? -90.0F : 90.0F));

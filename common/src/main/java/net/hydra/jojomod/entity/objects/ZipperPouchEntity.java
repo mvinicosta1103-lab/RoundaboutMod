@@ -28,28 +28,13 @@ import net.minecraft.world.level.Level.ExplosionInteraction;
 
 import java.util.UUID;
 
-/**The zipper Sticky Fingers sticks on a tagged mob with Block + Z.
- * It holds the item slot that was stuffed into the mob and follows the mob around (it is "mounted" on it),
- * the item is not in the mob's inventory, only in this entity.
- * The item acts on the mob while it is inside, and whatever is left pops out when the zipper expires
- * (or when the mob dies).
- *
- * Effects (see {@link #tickItem} and {@link #expire}):
- *   lava bucket  - sets the mob on fire after a short while, an empty bucket pops out
- *   water bucket - puts the mob out, hurts mobs that hate water, an empty bucket pops out
- *   knife        - nothing until the zipper expires, then it cuts the mob up and makes it bleed
- *   TNT          - blows up inside the mob after a short fuse (no block damage)
- *   potion       - the mob drinks it, a glass bottle pops out
- *   anything else - just stored for a while, then it pops out*/
 public class ZipperPouchEntity extends Entity {
 
-    /**Ticks the zipper lasts. Tweak to balance.*/
     public static final int DURATION = 400;
     public static final int LAVA_DELAY = 30;
     public static final int WATER_DELAY = 30;
     public static final int POTION_DELAY = 20;
     public static final int TNT_FUSE = 60;
-    /**If the mob can't be found (unloaded chunk) for this long, the item is released.*/
     private static final int MAX_MISSING = 100;
 
     private UUID hostUUID = null;
@@ -72,7 +57,6 @@ public class ZipperPouchEntity extends Entity {
         return pouch;
     }
 
-    /**Does this mob already have a zipper stuck on it?*/
     public static boolean hostHasPouch(Level level, LivingEntity host) {
         for (ZipperPouchEntity pouch : level.getEntitiesOfClass(ZipperPouchEntity.class,
                 host.getBoundingBox().inflate(3.0D))) {
@@ -138,7 +122,6 @@ public class ZipperPouchEntity extends Entity {
         }
         LivingEntity host = getHost();
         if (host == null) {
-            //the mob is dead, removed, or its chunk is not loaded yet
             missing++;
             Entity gone = hostUUID == null ? null : serverLevel.getEntity(hostUUID);
             boolean dead = gone instanceof LivingEntity living && !living.isAlive();
@@ -149,7 +132,6 @@ public class ZipperPouchEntity extends Entity {
         }
         missing = 0;
         life++;
-        //mounted on the mob: it follows it everywhere
         this.setPos(host.getX(), host.getY() + host.getBbHeight() * 0.5D, host.getZ());
 
         if (life % 10 == 0) {
@@ -164,8 +146,6 @@ public class ZipperPouchEntity extends Entity {
         }
     }
 
-    /**Item effects that happen while the item is inside.
-     * @return true if the zipper is done (it popped or discarded itself)*/
     private boolean tickItem(LivingEntity host) {
         if (stack.is(Items.LAVA_BUCKET) && life == LAVA_DELAY) {
             host.setSecondsOnFire(8);
@@ -195,7 +175,6 @@ public class ZipperPouchEntity extends Entity {
             return true;
         }
         if (stack.is(Items.TNT) && life == TNT_FUSE) {
-            //it blows up inside: hurts the mob and whoever is next to it, but never breaks blocks
             host.level().explode(getOwner(), host.getX(), host.getY() + host.getBbHeight() * 0.5D, host.getZ(),
                     1.5F, ExplosionInteraction.NONE);
             stack = ItemStack.EMPTY;
@@ -205,10 +184,8 @@ public class ZipperPouchEntity extends Entity {
         return false;
     }
 
-    /**Zipper timed out.*/
     private void expire(LivingEntity host) {
         if (stack.is(ModItems.KNIFE) || stack.is(ModItems.KNIFE_BUNDLE)) {
-            //the knives were cutting the whole time: the wound opens now
             LivingEntity owner = getOwner();
             float damage = 2.0F + Math.min(stack.getCount(), 4);
             DamageSource source = owner instanceof Player player ? host.damageSources().playerAttack(player)
@@ -220,7 +197,6 @@ public class ZipperPouchEntity extends Entity {
         popOut(host);
     }
 
-    /**Throws the item out of the mob (or where the zipper is if the mob is gone) and ends the zipper.*/
     private void popOut(LivingEntity host) {
         if (this.level() instanceof ServerLevel serverLevel) {
             double x = host != null ? host.getX() : this.getX();

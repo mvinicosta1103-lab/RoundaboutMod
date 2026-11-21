@@ -22,7 +22,6 @@ public class ZipperSparkParticle extends SimpleAnimatedParticle {
         this.sprites = $$7;
         this.gravity = 0;
         this.scale(1.5F);
-        //this.setFadeColor(15916745);
         this.setSpriteFromAge($$7);
     }
 

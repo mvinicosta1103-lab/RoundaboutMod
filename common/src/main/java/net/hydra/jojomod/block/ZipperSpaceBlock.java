@@ -15,8 +15,6 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 import javax.annotation.Nullable;
 
-/**The empty space left behind by Sticky Fingers' unzipped blocks. Invisible, can be walked through,
- * unbreakable. Its block entity remembers the original block and puts it back after a while.*/
 public class ZipperSpaceBlock extends BaseEntityBlock {
 
     public ZipperSpaceBlock(Properties properties) {

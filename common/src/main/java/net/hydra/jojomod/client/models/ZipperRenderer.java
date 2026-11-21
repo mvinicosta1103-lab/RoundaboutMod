@@ -18,11 +18,6 @@ import net.minecraft.world.entity.LivingEntity;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
-/**Draws Sticky Fingers' zipper procedurally (no model file): a row of golden teeth and a dark
- * opening in between that widens as the zipper unzips. TEMPORARY look until a real model exists.
- *
- * Texture layout (zipper.png, 32x16): 4 cells of 8x16 = [opening | (unused) | teeth | slider].
- * Only the golden teeth, the dark opening and the slider are drawn, there is no cloth.*/
 public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Roundabout.MOD_ID,
@@ -50,7 +45,6 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         }
         float rawAge = entity.tickCount - entity.getStateStart() + partialTicks;
         if (state == ZipperEntity.STATE_MINING && rawAge < 0.0F) {
-            //mining zippers appear one after the other, this one is not out yet
             return;
         }
         float age = Math.max(0.0F, rawAge);
@@ -77,7 +71,6 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             poseStack.mulPose(Axis.XP.rotationDegrees(face == Direction.UP ? -90.0F : 90.0F));
             poseStack.translate(0.0F, -length / 2.0F, 0.0F);
         } else if (vehicle instanceof LivingEntity mount) {
-            //stuffed into a mob: the zipper sits on the front of its body
             poseStack.mulPose(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTicks, mount.yBodyRotO, mount.yBodyRot)));
             poseStack.translate(0.0F, 0.0F, mount.getBbWidth() * 0.5F + 0.02F);
         } else {
@@ -98,15 +91,12 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             float lens = (float) Math.pow(Math.sin(Math.PI * (i + 0.5D) / SEGMENTS), 0.8D);
             float gap = maxHalf * open * lens;
 
-            //opening
             if (gap > 0.001F) {
                 quad(consumer, matrix, normal, -gap, y0, gap, y1, z, 0, light);
             }
-            //teeth
             quad(consumer, matrix, normal, -gap - TOOTH_WIDTH, y0, -gap, y1, z, 2, light);
             quad(consumer, matrix, normal, gap, y0, gap + TOOTH_WIDTH, y1, z, 2, light);
         }
-        //slider at the top of the opening and its pull tab
         float sliderY = length - 0.22F;
         quad(consumer, matrix, normal, -0.07F, sliderY, 0.07F, sliderY + 0.14F, z + 0.003F, 3, light);
         quad(consumer, matrix, normal, -0.04F, sliderY - 0.12F, 0.04F, sliderY, z + 0.003F, 3, light);
@@ -115,7 +105,6 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         super.render(entity, yaw, partialTicks, poseStack, buffer, light);
     }
 
-    /**One quad facing local +Z using one of the 4 cells of the texture.*/
     private static void quad(VertexConsumer consumer, Matrix4f matrix, Matrix3f normal,
                              float x0, float y0, float x1, float y1, float z, int cell, int light) {
         float u0 = cell * 0.25F;

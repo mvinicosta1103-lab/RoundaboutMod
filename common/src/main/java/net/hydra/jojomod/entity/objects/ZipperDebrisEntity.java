@@ -25,8 +25,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.UUID;
 
-/**A chunk of block launched out of a wall by Sticky Fingers' Sneak+Z zippers.
- * It flies like a projectile and does light stand damage to whoever it hits.*/
 public class ZipperDebrisEntity extends Entity {
 
     protected static final EntityDataAccessor<BlockState> BLOCK = SynchedEntityData.defineId(ZipperDebrisEntity.class,
@@ -49,7 +47,6 @@ public class ZipperDebrisEntity extends Entity {
         debris.entityData.set(BLOCK, state);
         debris.setPos(pos.x, pos.y, pos.z);
         if (face.getAxis() == Direction.Axis.Y) {
-            //from the floor/ceiling the debris pops up (or down) a few blocks and falls back on whoever is there
             double vertical = (0.35D + level.random.nextDouble() * 0.25D) * face.getStepY();
             debris.setDeltaMovement((level.random.nextDouble() - 0.5D) * 0.36D, vertical,
                     (level.random.nextDouble() - 0.5D) * 0.36D);

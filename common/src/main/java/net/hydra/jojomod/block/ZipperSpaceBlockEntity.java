@@ -16,7 +16,6 @@ import net.minecraft.world.phys.AABB;
 
 public class ZipperSpaceBlockEntity extends BlockEntity {
 
-    /**How many extra checks (every 5 ticks) the zipper waits for somebody to leave the space before it zips back anyway*/
     public static final int MAX_OVERTIME_CHECKS = 40;
 
     private BlockState original = Blocks.AIR.defaultBlockState();
@@ -64,11 +63,9 @@ public class ZipperSpaceBlockEntity extends BlockEntity {
             space.ticksLeft--;
             return;
         }
-        //only check every 5 ticks
         if (level.getGameTime() % 5 != 0) {
             return;
         }
-        //do not zip the wall back shut on top of someone standing inside it, wait a while for them to leave
         if (space.overtimeChecks < MAX_OVERTIME_CHECKS
                 && !level.getEntitiesOfClass(LivingEntity.class, new AABB(pos)).isEmpty()) {
             space.overtimeChecks++;

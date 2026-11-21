@@ -47,16 +47,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**Sticky Fingers (Bruno Bucciarati).
- * Model, animations and sounds are TEMPORARILY borrowed from King Crimson.
- *
- * Skill layout (key -> PowerContext):
- *   Z = SKILL_1, X = SKILL_2, C = SKILL_3, V = SKILL_4
- *   *_NORMAL = key, *_CROUCH = Sneak+key, *_GUARD / *_CROUCH_GUARD = Block+key
- *
- * DONE:  Z (unzip), Sneak+Z (zipper barrage), Block+Z (storage), C (dash + vault), V (zipper guillotine)
- * TODO:  Sneak+Click kick, X, Sneak+X, Block+X,
- *        Sneak+C, Block+C, Sneak+V*/
 public class PowersStickyFingers extends NewPunchingStand {
 
     public PowersStickyFingers(LivingEntity self) {
@@ -85,7 +75,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public Component ifWipListDev() {
-        return Component.literal("Vin").withStyle(ChatFormatting.YELLOW);
+        return Component.literal("Yagami").withStyle(ChatFormatting.YELLOW);
     }
 
     @Override
@@ -96,7 +86,6 @@ public class PowersStickyFingers extends NewPunchingStand {
     @Override
     public SoundEvent getSoundFromByte(byte soundChoice) {
         if (soundChoice == SoundIndex.SUMMON_SOUND) {
-            //TEMPORARY: King Crimson summon sound
             return ModSounds.SUMMON_KING_CRIMSON_EVENT;
         }
         return super.getSoundFromByte(soundChoice);
@@ -127,14 +116,9 @@ public class PowersStickyFingers extends NewPunchingStand {
         return Component.translatable("skins.roundabout.sticky_fingers.base");
     }
 
-    /**-------------------------------------------------------------------
-     * KEY ROUTING
-     * ------------------------------------------------------------------*/
-
     @Override
     public void powerActivate(PowerContext context) {
         switch (context) {
-            //Z
             case SKILL_1_NORMAL -> {
                 unzipClient();
             }
@@ -145,58 +129,41 @@ public class PowersStickyFingers extends NewPunchingStand {
                 storeClient();
             }
 
-            //X
             case SKILL_2_NORMAL -> {
-                //TODO: Prime and launch the fist (projectile)
             }
             case SKILL_2_CROUCH -> {
-                //TODO: Release zipper levels / dismember
             }
             case SKILL_2_GUARD, SKILL_2_CROUCH_GUARD -> {
-                //TODO: Disassemble self into pieces
             }
 
-            //C
             case SKILL_3_NORMAL -> {
                 dashOrVaultClient();
             }
             case SKILL_3_CROUCH -> {
-                //TODO: Latch zipper ride
             }
             case SKILL_3_GUARD, SKILL_3_CROUCH_GUARD -> {
-                //TODO: Hidden mode
             }
 
-            //V
             case SKILL_4_NORMAL -> {
                 guillotineClient();
             }
             case SKILL_4_CROUCH -> {
-                //TODO: Swap arm/leg
             }
             case SKILL_4_GUARD, SKILL_4_CROUCH_GUARD -> {
             }
         }
     }
 
-    /**C: dash on the ground, vault in the air (the vault is built into the dash preset)*/
     public void dashOrVaultClient() {
         if (!doVault()) {
             dash();
         }
     }
 
-    /**-------------------------------------------------------------------
-     * Z: UNZIP
-     * Creates a zipper on the wall/floor you are facing. See ZipperEntity:
-     * right click = hide inside, left click = open a tunnel, crouch + right click = free swallowed mobs.
-     * ------------------------------------------------------------------*/
-
     public static final byte UNZIP = PowerIndex.POWER_1;
     public static final int UNZIP_COOLDOWN = 60;
     public static final double UNZIP_RANGE = 6.0D;
 
-    /**The zipper this user has out right now (server only). A new Unzip closes the old one.*/
     private ZipperEntity activeZipper = null;
 
     public void unzipClient() {
@@ -214,7 +181,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         Level level = this.self.level();
         BlockPos anchor = blockHit.getBlockPos();
         Direction face = blockHit.getDirection();
-        //the space in front of the surface has to be free, that is where you will hide
         BlockPos front = anchor.relative(face);
         if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
             return;
@@ -223,7 +189,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (level.isClientSide()) {
             return;
         }
-        //bottom of the opening on a wall: 2 blocks tall, containing the block that was aimed at
         int feetY = Mth.floor(this.self.getY());
         int baseY = anchor.getY() < feetY ? anchor.getY() : Math.max(feetY, anchor.getY() - 1);
 
@@ -252,16 +217,9 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
-    /**-------------------------------------------------------------------
-     * TAGS
-     * Hitting a mob with the stand tags it, and every hit builds up the tag level.
-     * Block+Z needs a tagged mob, and the zipper level will be used by the X skills.
-     * ------------------------------------------------------------------*/
-
     public static final int TAG_DURATION = 600;
     public static final int TAG_MAX_LEVEL = 10;
 
-    /**mob uuid -> {tag level, game time the tag runs out} (server only)*/
     private final Map<UUID, long[]> tags = new HashMap<>();
 
     public boolean isTagged(LivingEntity target) {
@@ -293,17 +251,9 @@ public class PowersStickyFingers extends NewPunchingStand {
         return hit;
     }
 
-    /**-------------------------------------------------------------------
-     * Sneak+Z: ZIPPER BARRAGE
-     * Covers a wide area of a wall or floor with small zippers. They spread out from where you aimed,
-     * rapidly mine their block and launch it as debris that does light stand damage.
-     * Softer blocks (dirt) mine faster and make weaker debris. With stand griefing off only the debris is launched.
-     * ------------------------------------------------------------------*/
-
     public static final byte MASS_UNZIP = PowerIndex.POWER_2;
     public static final int MASS_UNZIP_COOLDOWN = 200;
     public static final int MASS_UNZIP_MAX_ZIPPERS = 25;
-    /**How long the stand keeps punching the ground (ticks)*/
     public static final int MASS_UNZIP_BARRAGE_TICKS = 40;
 
     private int barrageTimer = 0;
@@ -316,7 +266,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
-    /**Walls: 5 wide and 3 tall. Floor and ceiling: 5 by 5.*/
     private List<BlockPos> massUnzipArea(BlockPos anchor, Direction face) {
         List<BlockPos> area = new ArrayList<>();
         if (face.getAxis() == Direction.Axis.Y) {
@@ -356,7 +305,6 @@ public class PowersStickyFingers extends NewPunchingStand {
             if (!ZipperEntity.canZip(level, pos)) {
                 continue;
             }
-            //the zipper needs free space in front of its block
             BlockPos front = pos.relative(face);
             if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
                 continue;
@@ -379,7 +327,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         startBarrageAnimation(anchor, face);
     }
 
-    /**The stand does its barrage animation (punching) while the zippers do their work.*/
     private void startBarrageAnimation(BlockPos anchor, Direction face) {
         barrageTimer = MASS_UNZIP_BARRAGE_TICKS;
         barrageSpot = Vec3.atCenterOf(anchor).add(face.getStepX() * 0.5D, face.getStepY() * 0.5D, face.getStepZ() * 0.5D);
@@ -395,23 +342,15 @@ public class PowersStickyFingers extends NewPunchingStand {
             this.setPowerNone();
             return;
         }
-        //keep the stand in its punching pose and animation until the barrage is over
         if (barrageTimer % 5 == 0) {
             this.poseStand(OffsetIndex.ATTACK);
             this.animateStand(StandEntity.BARRAGE);
         }
-        //the sound of the punches landing on the ground
         if (barrageTimer % 3 == 0 && barrageSpot != null) {
             this.self.level().playSound(null, barrageSpot.x, barrageSpot.y, barrageSpot.z,
                     ModSounds.STAND_BARRAGE_HIT_EVENT, SoundSource.PLAYERS, 0.8F, 0.9F + this.self.getRandom().nextFloat() * 0.25F);
         }
     }
-
-    /**-------------------------------------------------------------------
-     * Block+Z: ZIPPER STORAGE
-     * Block: turns the block you face into a one row chest (only stand users see its zipper).
-     * Tagged mob: stuffs the item you hold into it for a while, some items do things to the mob in there.
-     * ------------------------------------------------------------------*/
 
     public static final byte ZIPPER_STORE = PowerIndex.POWER_3;
     public static final int STORE_COOLDOWN = 20;
@@ -479,7 +418,6 @@ public class PowersStickyFingers extends NewPunchingStand {
             message("roundabout.zipper.mob_full");
             return;
         }
-        //one whole item slot goes in
         ItemStack stuffed = held.copy();
         this.self.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
         ZipperStorageEntity zipper = ZipperStorageEntity.createForMob(level, this.self, mob, stuffed);
@@ -492,12 +430,6 @@ public class PowersStickyFingers extends NewPunchingStand {
                     mob.getZ(), 12, 0.3D, 0.4D, 0.3D, 0.02D);
         }
     }
-
-    /**-------------------------------------------------------------------
-     * V: ZIPPER GUILLOTINE
-     * Block particles erupt, after a second the guillotine closes, dealing
-     * heavy damage + Bleed 2 in an area. Stationary, can be dodged.
-     * ------------------------------------------------------------------*/
 
     public static final byte ZIPPER_GUILLOTINE = PowerIndex.POWER_4;
     public static final int GUILLOTINE_DELAY = 20;
@@ -542,7 +474,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         blockEruption(guillotinePos, 30);
     }
 
-    /**Block particles of the ground around the given position.*/
     private void blockEruption(Vec3 pos, int count) {
         if (!(this.self.level() instanceof ServerLevel serverLevel)) {
             return;
@@ -595,10 +526,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
-    /**-------------------------------------------------------------------
-     * HUD + SKILL MENU (icons are TEMPORARY King Crimson ones)
-     * ------------------------------------------------------------------*/
-
     @Override
     public void renderIcons(GuiGraphics context, int x, int y) {
         setSkillIcon(context, x, y, 1, StandIcons.KING_CRIMSON_MINING, PowerIndex.SKILL_1);
@@ -614,7 +541,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         int c0 = leftPos + 20, c1 = leftPos + 39, c2 = leftPos + 58, c3 = leftPos + 77, c4 = leftPos + 96, c5 = leftPos + 115;
         int r0 = topPos + 80, r1 = topPos + 99, r2 = topPos + 118;
 
-        //basics
         list.add(drawSingleGUIIcon(context, 18, c0, r0, 0, "ability.roundabout.punch",
                 "instruction.roundabout.press_attack", StandIcons.KING_CRIMSON_PUNCH, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c0, r1, 0, "ability.roundabout.guard",
@@ -626,7 +552,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c1, r1, 0, "ability.roundabout.mining",
                 "instruction.roundabout.hold_attack", StandIcons.KING_CRIMSON_MINING, 0, level, bypass));
 
-        //Z
         list.add(drawSingleGUIIcon(context, 18, c2, r0, 0, "ability.roundabout.zipper_unzip",
                 "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_MINING, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r1, 0, "ability.roundabout.zipper_mass",
@@ -634,7 +559,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c2, r2, 0, "ability.roundabout.zipper_storage",
                 "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_ITEM_GRAB, 1, level, bypass));
 
-        //X
         list.add(drawSingleGUIIcon(context, 18, c3, r0, 0, "ability.roundabout.zipper_fist",
                 "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r1, 0, "ability.roundabout.zipper_release",
@@ -642,7 +566,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c3, r2, 0, "ability.roundabout.zipper_disassemble",
                 "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
 
-        //C
         list.add(drawSingleGUIIcon(context, 18, c4, r0, 0, "ability.roundabout.dodge",
                 "instruction.roundabout.press_skill", StandIcons.DODGE, 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c4, r1, 0, "ability.roundabout.zipper_ride",
@@ -652,7 +575,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c5, r0, 0, "ability.roundabout.vault_kc",
                 "instruction.roundabout.press_skill_air", StandIcons.KING_CRIMSON_LEDGE_GRAB, 3, level, bypass));
 
-        //V
         list.add(drawSingleGUIIcon(context, 18, c5, r1, 0, "ability.roundabout.zipper_guillotine",
                 "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_FINAL_PUNCH, 4, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c5, r2, 0, "ability.roundabout.zipper_limb_swap",
