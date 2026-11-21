@@ -13,6 +13,8 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
@@ -43,10 +45,15 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
     public void render(ZipperEntity entity, float yaw, float partialTicks, PoseStack poseStack,
                        MultiBufferSource buffer, int light) {
         int state = entity.getState();
-        if (state == ZipperEntity.STATE_HIDING) {
+        if (state == ZipperEntity.STATE_HIDING || entity.isHiddenFromLocalPlayer()) {
             return;
         }
-        float age = Math.max(0.0F, entity.tickCount - entity.getStateStart() + partialTicks);
+        float rawAge = entity.tickCount - entity.getStateStart() + partialTicks;
+        if (state == ZipperEntity.STATE_MINING && rawAge < 0.0F) {
+            //mining zippers appear one after the other, this one is not out yet
+            return;
+        }
+        float age = Math.max(0.0F, rawAge);
         float open;
         float maxHalf = 0.28F;
         switch (state) {
@@ -55,18 +62,24 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
                 maxHalf = 0.40F;
             }
             case ZipperEntity.STATE_CLOSING -> open = 1.0F - Mth.clamp(age / ZipperEntity.CLOSE_ANIM_TICKS, 0.0F, 1.0F);
+            case ZipperEntity.STATE_STORAGE -> open = 0.0F;
             default -> open = Mth.clamp(age / ZipperEntity.OPEN_ANIM_TICKS, 0.0F, 1.0F);
         }
         open = open * open * (3.0F - 2.0F * open);
 
         Direction face = entity.getFace();
-        boolean flat = face.getAxis() == Direction.Axis.Y;
-        float length = flat ? 1.0F : 2.0F;
+        boolean flat = face.getAxis() == Direction.Axis.Y && entity.getVehicle() == null;
+        float length = (flat || entity.isMini()) ? 1.0F : 2.0F;
+        Entity vehicle = entity.getVehicle();
         
         poseStack.pushPose();
         if (flat) {
             poseStack.mulPose(Axis.XP.rotationDegrees(face == Direction.UP ? -90.0F : 90.0F));
             poseStack.translate(0.0F, -length / 2.0F, 0.0F);
+        } else if (vehicle instanceof LivingEntity mount) {
+            //stuffed into a mob: the zipper sits on the front of its body
+            poseStack.mulPose(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTicks, mount.yBodyRotO, mount.yBodyRot)));
+            poseStack.translate(0.0F, 0.0F, mount.getBbWidth() * 0.5F + 0.02F);
         } else {
             float angle = (float) Math.toDegrees(Math.atan2(face.getStepX(), face.getStepZ()));
             poseStack.mulPose(Axis.YP.rotationDegrees(angle));

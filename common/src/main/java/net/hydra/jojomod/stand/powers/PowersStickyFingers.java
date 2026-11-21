@@ -3,17 +3,14 @@ package net.hydra.jojomod.stand.powers;
 import com.google.common.collect.Lists;
 import net.hydra.jojomod.client.StandIcons;
 import net.hydra.jojomod.entity.ModEntities;
-import net.hydra.jojomod.block.ZipperSpaceBlock;
-import net.hydra.jojomod.entity.objects.ZipperDebrisEntity;
 import net.hydra.jojomod.entity.objects.ZipperEntity;
-import net.hydra.jojomod.entity.objects.ZipperPouchEntity;
 import net.hydra.jojomod.entity.objects.ZipperStorageEntity;
-import net.hydra.jojomod.event.ModGamerules;
-import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.entity.stand.StickyFingersEntity;
 import net.hydra.jojomod.event.AbilityIconInstance;
+import net.hydra.jojomod.event.index.OffsetIndex;
 import net.hydra.jojomod.event.index.PowerIndex;
+import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.index.SoundIndex;
 import net.hydra.jojomod.event.powers.StandPowers;
 import net.hydra.jojomod.sound.ModSounds;
@@ -45,21 +42,19 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**Sticky Fingers.
+/**Sticky Fingers (Bruno Bucciarati).
  * Model, animations and sounds are TEMPORARILY borrowed from King Crimson.
  *
  * Skill layout (key -> PowerContext):
  *   Z = SKILL_1, X = SKILL_2, C = SKILL_3, V = SKILL_4
  *   *_NORMAL = key, *_CROUCH = Sneak+key, *_GUARD / *_CROUCH_GUARD = Block+key
  *
- * DONE:  Z (unzip), Sneak+Z (zipper barrage), Block+Z (zipper storage), C (dash + vault), V (zipper guillotine)
+ * DONE:  Z (unzip), Sneak+Z (zipper barrage), Block+Z (storage), C (dash + vault), V (zipper guillotine)
  * TODO:  Sneak+Click kick, X, Sneak+X, Block+X,
  *        Sneak+C, Block+C, Sneak+V*/
 public class PowersStickyFingers extends NewPunchingStand {
@@ -116,11 +111,19 @@ public class PowersStickyFingers extends NewPunchingStand {
     public List<Byte> getSkinList() {
         List<Byte> list = Lists.newArrayList();
         list.add(StickyFingersEntity.PART_5);
+        list.add(StickyFingersEntity.MANGA_SKIN);
+        list.add(StickyFingersEntity.BLACK_AND_WHITE);
         return list;
     }
 
     @Override
     public Component getSkinName(byte skinId) {
+        if (skinId == StickyFingersEntity.MANGA_SKIN) {
+            return Component.translatable("skins.roundabout.sticky_fingers.manga");
+        }
+        if (skinId == StickyFingersEntity.BLACK_AND_WHITE) {
+            return Component.translatable("skins.roundabout.sticky_fingers.black_and_white");
+        }
         return Component.translatable("skins.roundabout.sticky_fingers.base");
     }
 
@@ -139,7 +142,7 @@ public class PowersStickyFingers extends NewPunchingStand {
                 massUnzipClient();
             }
             case SKILL_1_GUARD, SKILL_1_CROUCH_GUARD -> {
-                storageClient();
+                storeClient();
             }
 
             //X
@@ -243,45 +246,68 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
-
-    /**-------------------------------------------------------------------
-     * SNEAK + Z: ZIPPER BARRAGE
-     * Zippers appear all over the surface you are facing (a wide area) and rapidly mine it away, the blocks
-     * crack from the middle outwards. When a block breaks, debris launches out of it and deals light stand
-     * damage. Weaker blocks (dirt) mine faster and make weaker debris, so walls and floors become weapons.
-     * With stand griefing off the blocks stay, only the debris is spawned. (Based on the Secco fight.)
-     * ------------------------------------------------------------------*/
-
-    public static final byte MASS_UNZIP = PowerIndex.POWER_2;
-    public static final int MASS_UNZIP_COOLDOWN = 240;
-    public static final double MASS_UNZIP_RANGE = 8.0D;
-    /**Radius of the area, 3 = a 7x7 surface.*/
-    public static final int MASS_RADIUS = 3;
-    public static final int MASS_MAX_BLOCKS = 36;
-
-    /**One block being mined by the barrage.*/
-    private static class MassBlock {
-        final BlockPos pos;
-        final Direction face;
-        final BlockState state;
-        final float hardness;
-        final int delay;
-        final int total;
-        final int breakerId;
-        int age = 0;
-
-        MassBlock(BlockPos pos, Direction face, BlockState state, float hardness, int delay, int total, int breakerId) {
-            this.pos = pos;
-            this.face = face;
-            this.state = state;
-            this.hardness = hardness;
-            this.delay = delay;
-            this.total = total;
-            this.breakerId = breakerId;
+    private void message(String key) {
+        if (this.self instanceof Player player) {
+            player.displayClientMessage(Component.translatable(key), true);
         }
     }
 
-    private final List<MassBlock> massBlocks = new ArrayList<>();
+    /**-------------------------------------------------------------------
+     * TAGS
+     * Hitting a mob with the stand tags it, and every hit builds up the tag level.
+     * Block+Z needs a tagged mob, and the zipper level will be used by the X skills.
+     * ------------------------------------------------------------------*/
+
+    public static final int TAG_DURATION = 600;
+    public static final int TAG_MAX_LEVEL = 10;
+
+    /**mob uuid -> {tag level, game time the tag runs out} (server only)*/
+    private final Map<UUID, long[]> tags = new HashMap<>();
+
+    public boolean isTagged(LivingEntity target) {
+        long[] tag = tags.get(target.getUUID());
+        return tag != null && tag[1] > target.level().getGameTime();
+    }
+
+    public int getTagLevel(LivingEntity target) {
+        return isTagged(target) ? (int) tags.get(target.getUUID())[0] : 0;
+    }
+
+    public void addTag(LivingEntity target) {
+        long[] tag = tags.computeIfAbsent(target.getUUID(), id -> new long[]{0L, 0L});
+        long now = target.level().getGameTime();
+        if (tag[1] <= now) {
+            tag[0] = 0L;
+        }
+        tag[0] = Math.min(TAG_MAX_LEVEL, tag[0] + 1);
+        tag[1] = now + TAG_DURATION;
+    }
+
+    @Override
+    public boolean StandDamageEntityAttack(Entity target, float pow, float knockbackStrength, Entity attacker) {
+        boolean hit = super.StandDamageEntityAttack(target, pow, knockbackStrength, attacker);
+        if (hit && attacker == this.self && target instanceof LivingEntity living && !(target instanceof StandEntity)
+                && !this.self.level().isClientSide()) {
+            addTag(living);
+        }
+        return hit;
+    }
+
+    /**-------------------------------------------------------------------
+     * Sneak+Z: ZIPPER BARRAGE
+     * Covers a wide area of a wall or floor with small zippers. They spread out from where you aimed,
+     * rapidly mine their block and launch it as debris that does light stand damage.
+     * Softer blocks (dirt) mine faster and make weaker debris. With stand griefing off only the debris is launched.
+     * ------------------------------------------------------------------*/
+
+    public static final byte MASS_UNZIP = PowerIndex.POWER_2;
+    public static final int MASS_UNZIP_COOLDOWN = 200;
+    public static final int MASS_UNZIP_MAX_ZIPPERS = 25;
+    /**How long the stand keeps punching the ground (ticks)*/
+    public static final int MASS_UNZIP_BARRAGE_TICKS = 40;
+
+    private int barrageTimer = 0;
+    private Vec3 barrageSpot = null;
 
     public void massUnzipClient() {
         if (!this.onCooldown(PowerIndex.SKILL_1_SNEAK)) {
@@ -290,8 +316,28 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
+    /**Walls: 5 wide and 3 tall. Floor and ceiling: 5 by 5.*/
+    private List<BlockPos> massUnzipArea(BlockPos anchor, Direction face) {
+        List<BlockPos> area = new ArrayList<>();
+        if (face.getAxis() == Direction.Axis.Y) {
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    area.add(anchor.offset(dx, 0, dz));
+                }
+            }
+        } else {
+            Direction along = face.getAxis() == Direction.Axis.X ? Direction.SOUTH : Direction.EAST;
+            for (int t = -2; t <= 2; t++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    area.add(anchor.relative(along, t).above(dy));
+                }
+            }
+        }
+        return area;
+    }
+
     private void startMassUnzip() {
-        HitResult hit = this.self.pick(MASS_UNZIP_RANGE, 1.0F, false);
+        HitResult hit = this.self.pick(UNZIP_RANGE, 1.0F, false);
         if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
             return;
         }
@@ -300,266 +346,150 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (level.isClientSide()) {
             return;
         }
-        BlockPos center = blockHit.getBlockPos();
+        BlockPos anchor = blockHit.getBlockPos();
         Direction face = blockHit.getDirection();
-
-        //every block of the surface around the one you aimed at that is exposed on that side
-        List<BlockPos> found = new ArrayList<>();
-        for (int a = -MASS_RADIUS; a <= MASS_RADIUS; a++) {
-            for (int b = -MASS_RADIUS; b <= MASS_RADIUS; b++) {
-                BlockPos p;
-                switch (face.getAxis()) {
-                    case X -> p = center.offset(0, a, b);
-                    case Y -> p = center.offset(a, 0, b);
-                    default -> p = center.offset(a, b, 0);
-                }
-                if (!ZipperEntity.canZip(level, p)) {
-                    continue;
-                }
-                BlockPos front = p.relative(face);
-                if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
-                    continue;
-                }
-                found.add(p);
+        int count = 0;
+        for (BlockPos pos : massUnzipArea(anchor, face)) {
+            if (count >= MASS_UNZIP_MAX_ZIPPERS) {
+                break;
             }
+            if (!ZipperEntity.canZip(level, pos)) {
+                continue;
+            }
+            //the zipper needs free space in front of its block
+            BlockPos front = pos.relative(face);
+            if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
+                continue;
+            }
+            int distance = Math.abs(pos.getX() - anchor.getX()) + Math.abs(pos.getY() - anchor.getY())
+                    + Math.abs(pos.getZ() - anchor.getZ());
+            float hardness = Math.max(0.0F, level.getBlockState(pos).getDestroySpeed(level, pos));
+            int mineTicks = Mth.clamp(Math.round(hardness * 4.0F), 2, 30);
+            ZipperEntity zipper = ZipperEntity.createMini(level, this.self, pos, face, pos.getY());
+            zipper.startMining(distance * 2 + level.random.nextInt(3), mineTicks);
+            level.addFreshEntity(zipper);
+            count++;
         }
-        if (found.isEmpty()) {
+        if (count == 0) {
             message("roundabout.zipper.nothing_to_unzip");
             return;
         }
-        found.sort(Comparator.comparingDouble(p -> p.distSqr(center)));
-        if (found.size() > MASS_MAX_BLOCKS) {
-            found = new ArrayList<>(found.subList(0, MASS_MAX_BLOCKS));
-        }
-        if (!level.getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING)) {
-            message("roundabout.zipper.mass_no_griefing");
-        }
-
-        massBlocks.clear();
-        int index = 0;
-        for (BlockPos p : found) {
-            BlockState state = level.getBlockState(p);
-            float hardness = state.getDestroySpeed(level, p);
-            //soft blocks go fast, hard blocks take longer. The ripple starts in the middle
-            int total = Mth.clamp(Math.round(hardness * 5.0F) + 6, 6, 36);
-            int delay = (int) Math.round(Math.sqrt(p.distSqr(center)) * 2.0D);
-            int breakerId = 100000 + this.self.getId() * 64 + index;
-            massBlocks.add(new MassBlock(p, face, state, hardness, delay, total, breakerId));
-            index++;
-        }
         level.playSound(null, this.self.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2F, 0.7F);
         level.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.2F, 0.5F);
+        startBarrageAnimation(anchor, face);
     }
 
-    private void tickMassBlocks() {
-        if (massBlocks.isEmpty() || !(this.self.level() instanceof ServerLevel serverLevel)) {
+    /**The stand does its barrage animation (punching) while the zippers do their work.*/
+    private void startBarrageAnimation(BlockPos anchor, Direction face) {
+        barrageTimer = MASS_UNZIP_BARRAGE_TICKS;
+        barrageSpot = Vec3.atCenterOf(anchor).add(face.getStepX() * 0.5D, face.getStepY() * 0.5D, face.getStepZ() * 0.5D);
+        this.poseStand(OffsetIndex.ATTACK);
+        this.animateStand(StandEntity.BARRAGE);
+        playBarrageCrySound();
+    }
+
+    private void tickBarrageAnimation() {
+        barrageTimer--;
+        if (barrageTimer <= 0) {
+            barrageSpot = null;
+            this.setPowerNone();
             return;
         }
-        boolean dead = !this.self.isAlive();
-        Iterator<MassBlock> it = massBlocks.iterator();
-        while (it.hasNext()) {
-            MassBlock mb = it.next();
-            if (dead || serverLevel.getBlockState(mb.pos) != mb.state) {
-                serverLevel.destroyBlockProgress(mb.breakerId, mb.pos, -1);
-                it.remove();
-                continue;
-            }
-            mb.age++;
-            if (mb.age < mb.delay) {
-                continue;
-            }
-            int progress = mb.age - mb.delay;
-            if (progress % 2 == 0) {
-                serverLevel.destroyBlockProgress(mb.breakerId, mb.pos, Math.min(9, progress * 10 / mb.total));
-            }
-            if (progress % 4 == 0) {
-                Vec3 surface = Vec3.atCenterOf(mb.pos).add(mb.face.getStepX() * 0.55D, mb.face.getStepY() * 0.55D,
-                        mb.face.getStepZ() * 0.55D);
-                serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, surface.x, surface.y, surface.z,
-                        2, 0.25D, 0.25D, 0.25D, 0.01D);
-                serverLevel.playSound(null, mb.pos, mb.state.getSoundType().getHitSound(), SoundSource.BLOCKS, 0.5F, 0.8F);
-            }
-            if (progress >= mb.total) {
-                finishMassBlock(serverLevel, mb);
-                it.remove();
-            }
+        //keep the stand in its punching pose and animation until the barrage is over
+        if (barrageTimer % 5 == 0) {
+            this.poseStand(OffsetIndex.ATTACK);
+            this.animateStand(StandEntity.BARRAGE);
         }
-    }
-
-    private void finishMassBlock(ServerLevel level, MassBlock mb) {
-        level.destroyBlockProgress(mb.breakerId, mb.pos, -1);
-        boolean griefing = level.getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING);
-        boolean drops = level.getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING_OBTAINMENT);
-
-        //debris flies out of the surface that was mined
-        Vec3 normal = new Vec3(mb.face.getStepX(), mb.face.getStepY(), mb.face.getStepZ());
-        Vec3 start = Vec3.atCenterOf(mb.pos).add(normal.scale(0.6D));
-        float damage = ZipperDebrisEntity.damageForBlock(mb.hardness);
-        int count = 1 + level.random.nextInt(2) + (mb.hardness >= 2.0F ? 1 : 0);
-        for (int i = 0; i < count; i++) {
-            Vec3 velocity = normal.scale(0.45D + level.random.nextDouble() * 0.4D).add(
-                    (level.random.nextDouble() - 0.5D) * 0.5D,
-                    0.2D + level.random.nextDouble() * 0.25D,
-                    (level.random.nextDouble() - 0.5D) * 0.5D);
-            level.addFreshEntity(ZipperDebrisEntity.create(level, this.self, mb.state, start, velocity, damage));
-        }
-
-        if (griefing) {
-            level.destroyBlock(mb.pos, drops, this.self);
-        } else {
-            level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, mb.state),
-                    start.x, start.y, start.z, 6, 0.25D, 0.25D, 0.25D, 0.05D);
-            level.playSound(null, mb.pos, mb.state.getSoundType().getBreakSound(), SoundSource.BLOCKS, 0.6F, 1.0F);
+        //the sound of the punches landing on the ground
+        if (barrageTimer % 3 == 0 && barrageSpot != null) {
+            this.self.level().playSound(null, barrageSpot.x, barrageSpot.y, barrageSpot.z,
+                    ModSounds.STAND_BARRAGE_HIT_EVENT, SoundSource.PLAYERS, 0.8F, 0.9F + this.self.getRandom().nextFloat() * 0.25F);
         }
     }
 
     /**-------------------------------------------------------------------
-     * BLOCK + Z: ZIPPER STORAGE
-     * Looking at a block: it becomes a one row chest. The block looks normal, but stand users that get close
-     * see a zipper on the face you aimed at, which unzips when they open it (right click). Attacking the
-     * zipper pops it, all the items fly out and the block is normal again. Good for temporary storage.
-     *
-     * Looking at a TAGGED mob (punch a mob with Sticky Fingers to tag it for a few seconds): the item in your
-     * main hand is stuffed inside it. The item is held by a ZipperPouchEntity mounted on the mob, only for
-     * a while, and acts on the mob. See ZipperPouchEntity for the item effects.
+     * Block+Z: ZIPPER STORAGE
+     * Block: turns the block you face into a one row chest (only stand users see its zipper).
+     * Tagged mob: stuffs the item you hold into it for a while, some items do things to the mob in there.
      * ------------------------------------------------------------------*/
 
-    public static final byte ZIPPER_STORAGE = PowerIndex.POWER_3;
-    public static final int STORAGE_COOLDOWN = 30;
-    public static final double STORAGE_RANGE = 5.0D;
-    /**How long a punched mob stays tagged (ticks).*/
-    public static final int TAG_DURATION = 200;
+    public static final byte ZIPPER_STORE = PowerIndex.POWER_3;
+    public static final int STORE_COOLDOWN = 20;
+    public static final float STORE_MOB_RANGE = 4.0F;
 
-    /**Mobs this user tagged, and the game time when the tag runs out (server only).*/
-    private final Map<UUID, Long> taggedMobs = new HashMap<>();
-
-    public void storageClient() {
+    public void storeClient() {
         if (!this.onCooldown(PowerIndex.SKILL_1_GUARD)) {
-            this.tryPower(ZIPPER_STORAGE, true);
-            tryPowerPacket(ZIPPER_STORAGE);
+            this.tryPower(ZIPPER_STORE, true);
+            tryPowerPacket(ZIPPER_STORE);
         }
     }
 
-    private void startStorage() {
+    private void startStore() {
+        this.setCooldown(PowerIndex.SKILL_1_GUARD, STORE_COOLDOWN);
         Level level = this.self.level();
-        this.setCooldown(PowerIndex.SKILL_1_GUARD, STORAGE_COOLDOWN);
         if (level.isClientSide()) {
             return;
         }
-        Entity target = MainUtil.getTargetEntity(this.self, (float) STORAGE_RANGE);
-        boolean targetIsMob = target instanceof LivingEntity && !(target instanceof StandEntity) && target != this.self;
-        if (targetIsMob && isTagged((LivingEntity) target)) {
-            stuffMob((LivingEntity) target);
+        Entity target = MainUtil.rayCastEntity(this.self, STORE_MOB_RANGE);
+        if (target instanceof LivingEntity mob && !(target instanceof StandEntity)) {
+            if (isTagged(mob)) {
+                stuffMob(level, mob);
+            } else {
+                message("roundabout.zipper.not_tagged");
+            }
             return;
         }
-        HitResult hit = this.self.pick(STORAGE_RANGE, 1.0F, false);
-        if (hit instanceof BlockHitResult blockHit && blockHit.getType() == HitResult.Type.BLOCK) {
-            convertBlock(level, blockHit.getBlockPos(), blockHit.getDirection());
-        } else if (targetIsMob) {
-            message("roundabout.zipper.not_tagged");
-        } else {
-            message("roundabout.zipper.nothing_to_store");
-        }
+        storeBlock(level);
     }
 
-    private void convertBlock(Level level, BlockPos pos, Direction face) {
-        BlockState state = level.getBlockState(pos);
-        BlockPos front = pos.relative(face);
-        if (state.isAir() || !state.isCollisionShapeFullBlock(level, pos) || state.getDestroySpeed(level, pos) < 0
-                || state.hasBlockEntity() || state.getBlock() instanceof ZipperSpaceBlock
-                || !level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
+    private void storeBlock(Level level) {
+        HitResult hit = this.self.pick(UNZIP_RANGE, 1.0F, false);
+        if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
+            return;
+        }
+        BlockPos pos = blockHit.getBlockPos();
+        if (!ZipperEntity.canZip(level, pos)) {
             message("roundabout.zipper.cant_store");
             return;
         }
-        if (ZipperStorageEntity.findAt(level, pos) != null) {
+        boolean already = !level.getEntitiesOfClass(ZipperStorageEntity.class, new AABB(pos).inflate(1.0D),
+                zipper -> !zipper.isMobMode() && zipper.getAnchor().equals(pos)).isEmpty();
+        if (already) {
             message("roundabout.zipper.already_storage");
             return;
         }
-        ZipperStorageEntity storage = ZipperStorageEntity.create(level, this.self, pos, face);
-        level.addFreshEntity(storage);
-        level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.0F, 0.9F);
-        level.playSound(null, pos, SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.7F);
+        ZipperStorageEntity zipper = ZipperStorageEntity.createForBlock(level, this.self, pos, blockHit.getDirection());
+        level.addFreshEntity(zipper);
+        level.playSound(null, pos, SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.9F);
         if (level instanceof ServerLevel serverLevel) {
-            Vec3 c = storage.computeCenter();
-            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, c.x, c.y, c.z, 12, 0.25D, 0.25D, 0.25D, 0.02D);
+            Vec3 at = zipper.position().add(0.0D, 0.5D, 0.0D);
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, at.x, at.y, at.z, 10, 0.3D, 0.3D, 0.3D, 0.02D);
         }
     }
 
-    private void stuffMob(LivingEntity mob) {
-        Level level = this.self.level();
+    private void stuffMob(Level level, LivingEntity mob) {
         ItemStack held = this.self.getMainHandItem();
         if (held.isEmpty()) {
-            message("roundabout.zipper.no_item");
+            message("roundabout.zipper.need_item");
             return;
         }
-        if (ZipperPouchEntity.hostHasPouch(level, mob)) {
-            message("roundabout.zipper.already_stuffed");
+        boolean full = !level.getEntitiesOfClass(ZipperStorageEntity.class, mob.getBoundingBox().inflate(1.5D),
+                zipper -> zipper.isMobMode() && mob.getUUID().equals(zipper.getMobUUID())).isEmpty();
+        if (full) {
+            message("roundabout.zipper.mob_full");
             return;
         }
-        ItemStack moved = held.copy();
-        boolean creative = this.self instanceof Player player && player.getAbilities().instabuild;
-        if (!creative) {
-            this.self.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
-        }
-        level.addFreshEntity(ZipperPouchEntity.create(level, this.self, mob, moved));
-        level.playSound(null, mob.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.0F, 0.8F);
+        //one whole item slot goes in
+        ItemStack stuffed = held.copy();
+        this.self.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        ZipperStorageEntity zipper = ZipperStorageEntity.createForMob(level, this.self, mob, stuffed);
+        level.addFreshEntity(zipper);
+        zipper.mountOn(mob);
+        tags.remove(mob.getUUID());
         level.playSound(null, mob.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 1.2F);
         if (level instanceof ServerLevel serverLevel) {
-            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, mob.getX(), mob.getY() + mob.getBbHeight() * 0.5D,
-                    mob.getZ(), 14, 0.3D, 0.4D, 0.3D, 0.03D);
-        }
-    }
-
-    /**Sticky Fingers' punches tag whoever they land on.*/
-    @Override
-    public void punchImpact(Entity entity) {
-        super.punchImpact(entity);
-        tagMob(entity);
-    }
-
-    @Override
-    public void barrageImpact(Entity entity, int hitNumber) {
-        super.barrageImpact(entity, hitNumber);
-        tagMob(entity);
-    }
-
-    private void tagMob(Entity entity) {
-        if (this.self.level().isClientSide() || !(entity instanceof LivingEntity living) || entity == this.self
-                || entity instanceof StandEntity || !living.isAlive()) {
-            return;
-        }
-        taggedMobs.put(entity.getUUID(), this.self.level().getGameTime() + TAG_DURATION);
-    }
-
-    private boolean isTagged(LivingEntity entity) {
-        Long until = taggedMobs.get(entity.getUUID());
-        return until != null && entity.level().getGameTime() < until;
-    }
-
-    /**Tags expire, and tagged mobs get a spark over their head so you can tell.*/
-    private void tickTags() {
-        if (taggedMobs.isEmpty() || !(this.self.level() instanceof ServerLevel serverLevel)
-                || serverLevel.getGameTime() % 10 != 0) {
-            return;
-        }
-        long now = serverLevel.getGameTime();
-        Iterator<Map.Entry<UUID, Long>> it = taggedMobs.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<UUID, Long> entry = it.next();
-            Entity entity = serverLevel.getEntity(entry.getKey());
-            if (entry.getValue() <= now || entity == null || !entity.isAlive()) {
-                it.remove();
-                continue;
-            }
-            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, entity.getX(), entity.getY() + entity.getBbHeight() + 0.3D,
-                    entity.getZ(), 1, 0.1D, 0.05D, 0.1D, 0.0D);
-        }
-    }
-
-    /**Short message above the hotbar (players only).*/
-    private void message(String key) {
-        if (this.self instanceof Player player) {
-            player.displayClientMessage(Component.translatable(key), true);
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, mob.getX(), mob.getY() + mob.getBbHeight() / 2,
+                    mob.getZ(), 12, 0.3D, 0.4D, 0.3D, 0.02D);
         }
     }
 
@@ -592,8 +522,8 @@ public class PowersStickyFingers extends NewPunchingStand {
             startUnzip();
         } else if (move == MASS_UNZIP) {
             startMassUnzip();
-        } else if (move == ZIPPER_STORAGE) {
-            startStorage();
+        } else if (move == ZIPPER_STORE) {
+            startStore();
         } else if (move == ZIPPER_GUILLOTINE) {
             startGuillotine();
         }
@@ -650,9 +580,12 @@ public class PowersStickyFingers extends NewPunchingStand {
     @Override
     public void tickPower() {
         super.tickPower();
-        if (!this.self.level().isClientSide()) {
-            tickMassBlocks();
-            tickTags();
+        if (!this.self.level().isClientSide() && barrageTimer > 0) {
+            tickBarrageAnimation();
+        }
+        if (!this.self.level().isClientSide() && this.self.tickCount % 100 == 0 && !tags.isEmpty()) {
+            long now = this.self.level().getGameTime();
+            tags.values().removeIf(tag -> tag[1] <= now);
         }
         if (!this.self.level().isClientSide() && guillotineTimer > 0) {
             guillotineTimer--;
@@ -668,14 +601,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void renderIcons(GuiGraphics context, int x, int y) {
-        //Z changes with the stance: Block = zipper storage, Sneak = zipper barrage, normal = unzip
-        if (isGuarding()) {
-            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_STORAGE, PowerIndex.SKILL_1_GUARD);
-        } else if (isHoldingSneak()) {
-            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_1_SNEAK);
-        } else {
-            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_1);
-        }
+        setSkillIcon(context, x, y, 1, StandIcons.KING_CRIMSON_MINING, PowerIndex.SKILL_1);
         setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2);
         setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.SKILL_3);
         setSkillIcon(context, x, y, 4, StandIcons.KING_CRIMSON_FINAL_PUNCH, PowerIndex.SKILL_4);
@@ -702,11 +628,11 @@ public class PowersStickyFingers extends NewPunchingStand {
 
         //Z
         list.add(drawSingleGUIIcon(context, 18, c2, r0, 0, "ability.roundabout.zipper_unzip",
-                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_UNZIP, 1, level, bypass));
+                "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_MINING, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r1, 0, "ability.roundabout.zipper_mass",
-                "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_MASS, 1, level, bypass));
+                "instruction.roundabout.press_skill_crouch", StandIcons.KING_CRIMSON_MINING, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r2, 0, "ability.roundabout.zipper_storage",
-                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_ZIPPER_STORAGE, 1, level, bypass));
+                "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_ITEM_GRAB, 1, level, bypass));
 
         //X
         list.add(drawSingleGUIIcon(context, 18, c3, r0, 0, "ability.roundabout.zipper_fist",

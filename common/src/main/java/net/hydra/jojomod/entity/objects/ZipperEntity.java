@@ -7,6 +7,9 @@ import net.hydra.jojomod.entity.ModEntities;
 import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.event.ModGamerules;
 import net.hydra.jojomod.event.ModParticles;
+import net.hydra.jojomod.event.powers.ModDamageTypes;
+import net.hydra.jojomod.client.ClientUtil;
+import net.hydra.jojomod.event.powers.StandUser;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -21,6 +24,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -59,6 +63,11 @@ public class ZipperEntity extends Entity {
     public static final int STATE_HIDING = 1;
     public static final int STATE_TUNNEL = 2;
     public static final int STATE_CLOSING = 3;
+    /**Part of Sneak+Z: a small zipper that mines the single block it is stuck to*/
+    public static final int STATE_MINING = 4;
+    /**Block+Z storage zipper (see ZipperStorageEntity): closed / being used*/
+    public static final int STATE_STORAGE = 5;
+    public static final int STATE_STORAGE_OPEN = 6;
 
     /**Ticks. Tweak these to balance the skill.*/
     public static final int NEUTRAL_LIFE = 400;
@@ -77,11 +86,16 @@ public class ZipperEntity extends Entity {
             EntityDataSerializers.INT);
     protected static final EntityDataAccessor<Integer> STATE_START = SynchedEntityData.defineId(ZipperEntity.class,
             EntityDataSerializers.INT);
+    /**A mini zipper only covers a single block (1 tall) instead of a 2 tall opening*/
+    protected static final EntityDataAccessor<Boolean> MINI = SynchedEntityData.defineId(ZipperEntity.class,
+            EntityDataSerializers.BOOLEAN);
 
-    private UUID ownerUUID = null;
-    private BlockPos anchor = BlockPos.ZERO;
-    private int baseY = 0;
-    private int stateTicks = 0;
+    protected UUID ownerUUID = null;
+    protected BlockPos anchor = BlockPos.ZERO;
+    protected int baseY = 0;
+    protected int stateTicks = 0;
+    private int mineDelay = 0;
+    private int biteTick = -1;
     private final List<UUID> swallowed = new ArrayList<>();
     private float lastHealth = 0;
     private int lastFood = 0;
@@ -98,15 +112,37 @@ public class ZipperEntity extends Entity {
      * @param baseY the y of the bottom of the opening (walls)*/
     public static ZipperEntity create(Level level, LivingEntity owner, BlockPos anchor, Direction face, int baseY) {
         ZipperEntity zipper = new ZipperEntity(ModEntities.ZIPPER, level);
-        zipper.ownerUUID = owner.getUUID();
-        zipper.anchor = anchor;
-        zipper.baseY = baseY;
-        zipper.entityData.set(FACE, face.get3DDataValue());
-        zipper.entityData.set(STATE_START, 0);
-        zipper.refreshDimensions();
-        Vec3 pos = zipper.computeSurfacePos();
-        zipper.setPos(pos.x, pos.y, pos.z);
+        zipper.setup(owner, anchor, face, baseY, false);
         return zipper;
+    }
+
+    /**A zipper that only covers the single block at 'anchor'.*/
+    public static ZipperEntity createMini(Level level, LivingEntity owner, BlockPos anchor, Direction face, int baseY) {
+        ZipperEntity zipper = new ZipperEntity(ModEntities.ZIPPER, level);
+        zipper.setup(owner, anchor, face, baseY, true);
+        return zipper;
+    }
+
+    protected void setup(LivingEntity owner, BlockPos anchor, Direction face, int baseY, boolean mini) {
+        this.ownerUUID = owner.getUUID();
+        this.anchor = anchor;
+        this.baseY = baseY;
+        this.entityData.set(FACE, face.get3DDataValue());
+        this.entityData.set(MINI, mini);
+        this.entityData.set(STATE_START, 0);
+        this.refreshDimensions();
+        Vec3 pos = this.computeSurfacePos();
+        this.setPos(pos.x, pos.y, pos.z);
+    }
+
+    /**Starts the mining of the block this (mini) zipper is stuck to.
+     * @param appearDelay ticks before the zipper shows up (so a wave of zippers can spread out)
+     * @param mineTicks ticks the mining takes once the zipper is open (harder blocks take longer)*/
+    public void startMining(int appearDelay, int mineTicks) {
+        setState(STATE_MINING);
+        this.entityData.set(STATE_START, this.tickCount + appearDelay);
+        this.mineDelay = appearDelay + OPEN_ANIM_TICKS + mineTicks;
+        this.biteTick = appearDelay + OPEN_ANIM_TICKS;
     }
 
     @Override
@@ -114,6 +150,7 @@ public class ZipperEntity extends Entity {
         this.entityData.define(STATE, STATE_NEUTRAL);
         this.entityData.define(FACE, Direction.UP.get3DDataValue());
         this.entityData.define(STATE_START, 0);
+        this.entityData.define(MINI, false);
     }
 
     /**-------------------------------------------------------------------
@@ -133,6 +170,27 @@ public class ZipperEntity extends Entity {
     /**tickCount at which the current state began (used by the renderer for the open/close animation)*/
     public int getStateStart() {
         return this.entityData.get(STATE_START);
+    }
+
+    public boolean isMini() {
+        return this.entityData.get(MINI);
+    }
+
+    public BlockPos getAnchor() {
+        return anchor;
+    }
+
+    /**Storage zippers (Block+Z) are only seen by people who have a stand.*/
+    public boolean isHiddenFromLocalPlayer() {
+        return false;
+    }
+
+    protected boolean localPlayerHasStand() {
+        if (!this.level().isClientSide()) {
+            return true;
+        }
+        Player player = ClientUtil.getPlayer();
+        return player != null && ((StandUser) player).roundabout$hasAStand();
     }
 
     public Direction getFace() {
@@ -155,12 +213,12 @@ public class ZipperEntity extends Entity {
         if (getFace().getAxis() == Direction.Axis.Y) {
             return EntityDimensions.scalable(1.0F, 0.2F);
         }
-        return EntityDimensions.scalable(0.9F, 2.0F);
+        return EntityDimensions.scalable(0.9F, isMini() ? 1.0F : 2.0F);
     }
 
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
-        if (FACE.equals(key)) {
+        if (FACE.equals(key) || MINI.equals(key)) {
             this.refreshDimensions();
         }
         super.onSyncedDataUpdated(key);
@@ -473,6 +531,11 @@ public class ZipperEntity extends Entity {
             return;
         }
         stateTicks++;
+        serverTick();
+    }
+
+    /**Server side logic of every state. Storage zippers override this.*/
+    protected void serverTick() {
         switch (getState()) {
             case STATE_NEUTRAL -> {
                 Player owner = getOwnerPlayer();
@@ -491,12 +554,76 @@ public class ZipperEntity extends Entity {
                     close();
                 }
             }
+            case STATE_MINING -> {
+                if (stateTicks == biteTick) {
+                    bite();
+                }
+                if (stateTicks >= mineDelay) {
+                    performMine();
+                }
+            }
             case STATE_CLOSING -> {
                 if (stateTicks >= CLOSE_ANIM_TICKS) {
                     this.discard();
                 }
             }
         }
+    }
+
+    /**-------------------------------------------------------------------
+     * MINING (Sneak+Z): break the block, launch it as debris
+     * ------------------------------------------------------------------*/
+
+    public static final float BITE_DAMAGE = 2.0F;
+
+    /**The moment a mining zipper finishes opening it bites whoever is standing on/in front of its block.
+     * The user and their stand are safe.*/
+    private void bite() {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        BlockPos front = anchor.relative(getFace());
+        Player owner = getOwnerPlayer();
+        for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, new AABB(front).inflate(0.15D))) {
+            if (!target.isAlive() || isOwner(target) || target instanceof StandEntity) {
+                continue;
+            }
+            DamageSource source = owner != null
+                    ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, owner)
+                    : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
+            if (target.hurt(source, BITE_DAMAGE)) {
+                //the zipper throws them into the air
+                Vec3 motion = target.getDeltaMovement();
+                target.setDeltaMovement(motion.x, Math.max(motion.y, 0.4D), motion.z);
+                target.hurtMarked = true;
+            }
+        }
+        serverLevel.playSound(null, front, SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 0.6F, 1.5F);
+    }
+
+    private void performMine() {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        BlockState state = serverLevel.getBlockState(anchor);
+        if (!canZip(serverLevel, anchor)) {
+            close();
+            return;
+        }
+        //softer blocks (dirt) mine faster and make weaker debris
+        float hardness = Math.max(0.0F, state.getDestroySpeed(serverLevel, anchor));
+        float damage = Mth.clamp(1.0F + hardness * 1.2F, 1.0F, 5.0F);
+        Direction face = getFace();
+        Vec3 center = Vec3.atCenterOf(anchor).add(face.getStepX() * 0.55D, face.getStepY() * 0.55D, face.getStepZ() * 0.55D);
+        ZipperDebrisEntity.launch(serverLevel, ownerUUID, state, center, face, damage);
+        if (serverLevel.getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING)) {
+            serverLevel.destroyBlock(anchor, false);
+        } else {
+            //griefing is off: only the debris, the block stays
+            serverLevel.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, state),
+                    center.x, center.y, center.z, 8, 0.25D, 0.25D, 0.25D, 0.05D);
+        }
+        close();
     }
 
     @Override
@@ -529,12 +656,14 @@ public class ZipperEntity extends Entity {
     /**Sparks running along the opening while the zipper is open.*/
     private void tickClientParticles() {
         int state = getState();
-        if ((state != STATE_NEUTRAL && state != STATE_TUNNEL) || this.tickCount % 3 != 0) {
+        boolean sparkling = state == STATE_NEUTRAL || state == STATE_TUNNEL || state == STATE_STORAGE_OPEN
+                || (state == STATE_MINING && this.tickCount >= getStateStart() + OPEN_ANIM_TICKS);
+        if (!sparkling || this.tickCount % 3 != 0 || isHiddenFromLocalPlayer()) {
             return;
         }
         Direction face = getFace();
         double along = (this.random.nextDouble() - 0.5D) * 0.5D;
-        double height = face.getAxis() == Direction.Axis.Y ? 0.05D : this.random.nextDouble() * 2.0D;
+        double height = face.getAxis() == Direction.Axis.Y ? 0.05D : this.random.nextDouble() * (isMini() ? 1.0D : 2.0D);
         double x = this.getX();
         double y = this.getY() + height;
         double z = this.getZ();
@@ -562,6 +691,8 @@ public class ZipperEntity extends Entity {
         anchor = new BlockPos(tag.getInt("ax"), tag.getInt("ay"), tag.getInt("az"));
         baseY = tag.getInt("baseY");
         stateTicks = tag.getInt("stateTicks");
+        mineDelay = tag.getInt("mineDelay");
+        this.entityData.set(MINI, tag.getBoolean("mini"));
         this.entityData.set(FACE, tag.getInt("face"));
         this.entityData.set(STATE, tag.getInt("state"));
         swallowed.clear();
@@ -581,6 +712,8 @@ public class ZipperEntity extends Entity {
         tag.putInt("az", anchor.getZ());
         tag.putInt("baseY", baseY);
         tag.putInt("stateTicks", stateTicks);
+        tag.putInt("mineDelay", mineDelay);
+        tag.putBoolean("mini", isMini());
         tag.putInt("face", this.entityData.get(FACE));
         tag.putInt("state", getState());
         ListTag list = new ListTag();

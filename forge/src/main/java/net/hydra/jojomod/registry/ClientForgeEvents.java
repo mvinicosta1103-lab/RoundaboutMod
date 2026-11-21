@@ -89,8 +89,7 @@ public class ClientForgeEvents {
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ForgeEntities.ZIPPER.get(), ZipperRenderer::new);
         event.registerEntityRenderer(ForgeEntities.ZIPPER_DEBRIS.get(), ZipperDebrisRenderer::new);
-        event.registerEntityRenderer(ForgeEntities.ZIPPER_STORAGE.get(), ZipperStorageRenderer::new);
-        event.registerEntityRenderer(ForgeEntities.ZIPPER_POUCH.get(), NoopRenderer::new);
+        event.registerEntityRenderer(ForgeEntities.ZIPPER_STORAGE.get(), ZipperRenderer::new);
         event.registerEntityRenderer(ForgeEntities.TERRIER_DOG.get(), TerrierEntityRenderer::new);
         event.registerEntityRenderer(ForgeEntities.FALCON.get(), FalconRenderer::new);
         event.registerEntityRenderer(ForgeEntities.SNAKE.get(), SnakeRenderer::new);

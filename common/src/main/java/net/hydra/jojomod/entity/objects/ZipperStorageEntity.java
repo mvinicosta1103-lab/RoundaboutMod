@@ -1,257 +1,338 @@
 package net.hydra.jojomod.entity.objects;
 
 import net.hydra.jojomod.entity.ModEntities;
-import net.hydra.jojomod.entity.stand.StandEntity;
+import net.hydra.jojomod.event.ModGamerules;
 import net.hydra.jojomod.event.ModParticles;
-import net.hydra.jojomod.event.powers.StandUser;
+import net.hydra.jojomod.event.powers.ModDamageTypes;
+import net.hydra.jojomod.item.KnifeItem;
+import net.hydra.jojomod.util.MainUtil;
+import net.hydra.jojomod.util.ZipperStorageData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.Containers;
+import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
-/**Zipper Storage (Block + Z on a block).
- * The block you were facing stays exactly as it was, but a zipper is stuck to the face you aimed at and holds
- * one row (9 slots) of items. Only stand users can see the zipper (when they are close), and only they can
- * open it with a right click: the zipper unzips while the menu is open.
- * Attacking the zipper pops it: every item flies out and the block goes back to normal.
- * If the block itself disappears, the items are released as well.*/
-public class ZipperStorageEntity extends Entity {
+/**Sticky Fingers' Block+Z.
+ *
+ * BLOCK mode: a zipper on a block that opens the player's zipper storage, which works like an Ender Chest:
+ * one personal one row inventory (see ZipperStorageData) that is the same in every zipper, anywhere.
+ * The block itself is untouched and still looks the same, only stand users can see the zipper.
+ * Attack the zipper to pop it. The items stay in the player's storage, nothing is lost.
+ *
+ * MOB mode: a zipper mounted on a "tagged" mob with one item slot stuffed inside. After a while the zipper
+ * expires and the item pops out, and some items do something to the mob while they are in there.*/
+public class ZipperStorageEntity extends ZipperEntity {
 
-    public static final int SLOTS = 9;
-    /**The hitbox is a small cube centered on the face of the block.*/
-    public static final float SIZE = 0.7F;
+    /**How long an item stays inside a mob (ticks)*/
+    public static final int MOB_ITEM_LIFE = 600;
 
-    protected static final EntityDataAccessor<Integer> FACE = SynchedEntityData.defineId(ZipperStorageEntity.class,
-            EntityDataSerializers.INT);
-    protected static final EntityDataAccessor<Boolean> OPEN = SynchedEntityData.defineId(ZipperStorageEntity.class,
-            EntityDataSerializers.BOOLEAN);
+    /**The item stuffed in a mob (MOB mode only). The block storage lives in ZipperStorageData.*/
+    private final SimpleContainer container = new SimpleContainer(1);
+    /**Players that have the storage open right now, the zipper stays unzipped while there are any*/
+    private final Set<UUID> viewers = new HashSet<>();
 
-    private UUID ownerUUID = null;
-    private BlockPos anchor = BlockPos.ZERO;
-    private String blockId = "";
-    private final ZipperContainer container = new ZipperContainer(this);
-    private int viewers = 0;
-
-    /**Client only: 0 = closed, 1 = fully unzipped (the renderer smooths it with the previous value).*/
-    private float openAnim = 0.0F;
-    private float prevOpenAnim = 0.0F;
+    private boolean mobMode = false;
+    private UUID mobUUID = null;
+    private int mobTicks = 0;
+    private boolean mounted = false;
 
     public ZipperStorageEntity(EntityType<?> type, Level level) {
         super(type, level);
-        this.noPhysics = true;
     }
 
-    /**@param anchor the block that became storage
-     * @param face the face of that block that was aimed at, the zipper is drawn there*/
-    public static ZipperStorageEntity create(Level level, LivingEntity owner, BlockPos anchor, Direction face) {
-        ZipperStorageEntity storage = new ZipperStorageEntity(ModEntities.ZIPPER_STORAGE, level);
-        storage.ownerUUID = owner == null ? null : owner.getUUID();
-        storage.anchor = anchor;
-        storage.blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(anchor).getBlock()).toString();
-        storage.entityData.set(FACE, face.get3DDataValue());
-        Vec3 c = storage.computeCenter();
-        storage.setPos(c.x, c.y - SIZE / 2.0D, c.z);
-        return storage;
+    /**-------------------------------------------------------------------
+     * CREATION
+     * ------------------------------------------------------------------*/
+
+    public static ZipperStorageEntity createForBlock(Level level, LivingEntity owner, BlockPos anchor, Direction face) {
+        ZipperStorageEntity zipper = new ZipperStorageEntity(ModEntities.ZIPPER_STORAGE, level);
+        zipper.setup(owner, anchor, face, anchor.getY(), true);
+        zipper.setState(STATE_STORAGE);
+        return zipper;
     }
 
-    /**The storage zipper on that block, if there is one.*/
-    public static ZipperStorageEntity findAt(Level level, BlockPos pos) {
-        for (ZipperStorageEntity storage : level.getEntitiesOfClass(ZipperStorageEntity.class,
-                new AABB(pos).inflate(1.0D))) {
-            if (storage.anchor.equals(pos) && !storage.isRemoved()) {
-                return storage;
-            }
-        }
-        return null;
+    public static ZipperStorageEntity createForMob(Level level, LivingEntity owner, LivingEntity mob, ItemStack stack) {
+        ZipperStorageEntity zipper = new ZipperStorageEntity(ModEntities.ZIPPER_STORAGE, level);
+        zipper.mobMode = true;
+        zipper.mobUUID = mob.getUUID();
+        zipper.container.setItem(0, stack);
+        zipper.setup(owner, mob.blockPosition(), Direction.NORTH, mob.blockPosition().getY(), true);
+        zipper.setPos(mob.getX(), mob.getY() + mob.getBbHeight() * 0.3D, mob.getZ());
+        zipper.setState(STATE_STORAGE);
+        return zipper;
     }
 
-    @Override
-    protected void defineSynchedData() {
-        this.entityData.define(FACE, Direction.NORTH.get3DDataValue());
-        this.entityData.define(OPEN, false);
+    /**Call after the zipper was added to the level.*/
+    public void mountOn(LivingEntity mob) {
+        this.mounted = this.startRiding(mob, true);
     }
 
-    public Direction getFace() {
-        return Direction.from3DDataValue(this.entityData.get(FACE));
+    public boolean isMobMode() {
+        return mobMode;
     }
 
-    public boolean isOpen() {
-        return this.entityData.get(OPEN);
+    public UUID getMobUUID() {
+        return mobUUID;
     }
 
-    public BlockPos getAnchor() {
-        return anchor;
-    }
-
-    public SimpleContainer getContainer() {
-        return container;
-    }
-
-    public float getOpenAnim() {
-        return openAnim;
-    }
-
-    public float getPrevOpenAnim() {
-        return prevOpenAnim;
-    }
-
-    /**The block in front of the zipper (used by the renderer to read the light level).*/
-    public BlockPos getFrontPos() {
-        return anchor.relative(getFace());
-    }
-
-    /**Middle of the zipper: the face of the block, a hair outwards.*/
-    public Vec3 computeCenter() {
-        Direction face = getFace();
-        return new Vec3(anchor.getX() + 0.5D + face.getStepX() * 0.515D,
-                anchor.getY() + 0.5D + face.getStepY() * 0.515D,
-                anchor.getZ() + 0.5D + face.getStepZ() * 0.515D);
-    }
+    /**-------------------------------------------------------------------
+     * VISIBILITY / INTERACTION
+     * ------------------------------------------------------------------*/
 
     @Override
-    public EntityDimensions getDimensions(Pose pose) {
-        return EntityDimensions.fixed(SIZE, SIZE);
+    public boolean isHiddenFromLocalPlayer() {
+        return !localPlayerHasStand();
     }
 
     @Override
     public boolean isPickable() {
-        return !this.isRemoved();
+        if (this.isRemoved() || mobMode || getState() == STATE_CLOSING) {
+            return false;
+        }
+        //only stand users can see (and so click) the zipper
+        return localPlayerHasStand();
     }
 
-    @Override
-    public boolean isNoGravity() {
-        return true;
-    }
-
-    @Override
-    public boolean canBeHitByProjectile() {
-        return false;
-    }
-
-    @Override
-    public boolean fireImmune() {
-        return true;
-    }
-
-    public static boolean isStandUser(Player player) {
-        return player.isSpectator() || !((StandUser) player).roundabout$getStandDisc().isEmpty();
-    }
-
-    /**-------------------------------------------------------------------
-     * INTERACTION
-     * ------------------------------------------------------------------*/
-
-    /**Right click: open the storage (stand users only).*/
+    /**Right click: open your zipper storage (the same one in every zipper)*/
     @Override
     public InteractionResult interact(Player player, InteractionHand hand) {
-        if (!isStandUser(player)) {
+        if (mobMode) {
             return InteractionResult.PASS;
         }
         if (this.level().isClientSide()) {
             return InteractionResult.SUCCESS;
         }
-        player.openMenu(new SimpleMenuProvider((id, inventory, p) ->
-                new ChestMenu(MenuType.GENERIC_9x1, id, inventory, container, 1),
-                Component.translatable("roundabout.zipper_storage.title")));
-        return InteractionResult.CONSUME;
+        if (player instanceof ServerPlayer serverPlayer && this.level() instanceof ServerLevel serverLevel) {
+            SimpleContainer storage = ZipperStorageData.get(serverLevel).getContainer(serverPlayer.getUUID());
+            serverPlayer.openMenu(new SimpleMenuProvider(
+                    (id, inventory, p) -> new ChestMenu(MenuType.GENERIC_9x1, id, inventory, storage, 1),
+                    Component.translatable("roundabout.zipper_storage.title")));
+            viewers.add(serverPlayer.getUUID());
+            if (getState() == STATE_STORAGE) {
+                setState(STATE_STORAGE_OPEN);
+            }
+            this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                    SoundSource.BLOCKS, 0.8F, 1.3F);
+            return InteractionResult.CONSUME;
+        }
+        return InteractionResult.PASS;
     }
 
-    /**Attacked (vanilla hit or stand punch): the zipper pops and the items fly out.*/
+    /**Left click: pop the zipper. The items stay in the player's zipper storage.*/
     @Override
     public boolean hurt(DamageSource source, float amount) {
-        if (this.level().isClientSide() || this.isRemoved()) {
+        if (this.level().isClientSide() || this.isRemoved() || mobMode) {
             return false;
         }
         Entity attacker = source.getEntity();
         if (attacker == null) {
             attacker = source.getDirectEntity();
         }
-        if (attacker instanceof StandEntity stand && stand.getUser() != null) {
-            attacker = stand.getUser();
-        }
-        if (attacker instanceof Player player && isStandUser(player)) {
-            pop();
+        if (attacker instanceof Player) {
+            sparks(this.position().add(0, 0.5D, 0), 12);
+            this.level().playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.2F);
+            this.discard();
             return true;
         }
         return false;
     }
 
-    /**Throws every item out and turns the block back to normal.*/
-    public void pop() {
-        if (this.level() instanceof ServerLevel serverLevel) {
-            Vec3 c = computeCenter();
-            Containers.dropContents(serverLevel, BlockPos.containing(c), container);
-            container.clearContent();
-            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, c.x, c.y, c.z, 14, 0.3D, 0.3D, 0.3D, 0.03D);
-            serverLevel.playSound(null, BlockPos.containing(c), SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.2F);
-            serverLevel.playSound(null, BlockPos.containing(c), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.BLOCKS, 0.8F, 1.0F);
-        }
-        this.discard();
-    }
-
-    private void updateOpen() {
-        boolean open = viewers > 0;
-        if (open != isOpen()) {
-            this.entityData.set(OPEN, open);
-            this.level().playSound(null, this.blockPosition(), open ? SoundEvents.ARMOR_EQUIP_CHAIN : SoundEvents.SHEEP_SHEAR,
-                    SoundSource.BLOCKS, 0.7F, open ? 0.9F : 1.3F);
-        }
-    }
-
     /**-------------------------------------------------------------------
-     * LIFECYCLE
+     * SERVER LOGIC
      * ------------------------------------------------------------------*/
 
     @Override
-    public void tick() {
-        super.tick();
-        if (this.level().isClientSide()) {
-            prevOpenAnim = openAnim;
-            openAnim = isOpen() ? Math.min(1.0F, openAnim + 0.2F) : Math.max(0.0F, openAnim - 0.2F);
+    protected void serverTick() {
+        if (getState() == STATE_CLOSING) {
+            super.serverTick();
             return;
         }
-        //the block under the zipper has to still be the same block
-        if (this.tickCount % 10 == 0) {
-            BlockState state = this.level().getBlockState(anchor);
-            String now = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-            if (state.isAir() || !now.equals(blockId)) {
-                pop();
-            }
+        if (mobMode) {
+            tickMob();
+            return;
+        }
+        tickViewers();
+        if (this.tickCount % 10 == 0 && this.level().getBlockState(anchor).isAir()) {
+            //the block is gone (mined, exploded...), so the zipper pops. Nothing is lost, the items are not in it.
+            this.discard();
+        }
+    }
+
+    /**Keeps the zipper unzipped while somebody still has the storage open.*/
+    private void tickViewers() {
+        if (!viewers.isEmpty() && this.tickCount % 5 == 0 && this.level() instanceof ServerLevel serverLevel) {
+            ZipperStorageData data = ZipperStorageData.get(serverLevel);
+            viewers.removeIf(id -> {
+                Player viewer = serverLevel.getPlayerByUUID(id);
+                return viewer == null || viewer.distanceToSqr(this) > 100.0D
+                        || !(viewer.containerMenu instanceof ChestMenu menu)
+                        || menu.getContainer() != data.getContainer(id);
+            });
+        }
+        if (viewers.isEmpty() && getState() == STATE_STORAGE_OPEN) {
+            setState(STATE_STORAGE);
+        }
+    }
+
+    private void tickMob() {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        mobTicks++;
+        Entity found = mobUUID == null ? null : serverLevel.getEntity(mobUUID);
+        if (!(found instanceof LivingEntity mob) || !mob.isAlive()) {
+            popAll(this.position());
+            this.discard();
+            return;
+        }
+        if (!mounted || this.getVehicle() != mob) {
+            //could not ride it (already has a rider): just follow it
+            this.setPos(mob.getX(), mob.getY() + mob.getBbHeight() * 0.3D, mob.getZ());
+        }
+        ItemStack stack = container.getItem(0);
+        if (stack.isEmpty()) {
+            finishMob(mob);
+            return;
+        }
+        if (applyItemEffects(mob, stack)) {
+            return;
+        }
+        if (mobTicks >= MOB_ITEM_LIFE) {
+            onExpire(mob, stack);
+            finishMob(mob);
+        }
+    }
+
+    /**Effects the stuffed item has on the mob while it is inside.
+     * @return true when the zipper was used up*/
+    private boolean applyItemEffects(LivingEntity mob, ItemStack stack) {
+        Item item = stack.getItem();
+        Vec3 at = mob.position();
+        if (item == Items.LAVA_BUCKET && mobTicks == 40) {
+            //pops a blank bucket out and sets the mob on fire
+            mob.setSecondsOnFire(10);
+            popStack(at, new ItemStack(Items.BUCKET));
+            container.setItem(0, ItemStack.EMPTY);
+            finishMob(mob);
+            return true;
+        }
+        if (item == Items.WATER_BUCKET && mobTicks == 40) {
+            mob.clearFire();
+            mob.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 100, 2));
+            popStack(at, new ItemStack(Items.BUCKET));
+            container.setItem(0, ItemStack.EMPTY);
+            finishMob(mob);
+            return true;
+        }
+        if (item == Items.TNT && mobTicks == 60) {
+            stack.shrink(1);
+            boolean griefing = this.level().getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING);
+            this.level().explode(null, mob.getX(), mob.getY() + 0.5D, mob.getZ(), 1.5F,
+                    griefing ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.NONE);
+            finishMob(mob);
+            return true;
+        }
+        if ((item == Items.SPIDER_EYE || item == Items.POISONOUS_POTATO || item == Items.PUFFERFISH) && mobTicks == 20) {
+            stack.shrink(1);
+            mob.addEffect(new MobEffectInstance(MobEffects.POISON, 140, 1));
+            finishMob(mob);
+            return true;
+        }
+        if (item == Items.GOLDEN_APPLE && mobTicks == 20) {
+            stack.shrink(1);
+            mob.heal(6.0F);
+            mob.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1));
+            finishMob(mob);
+            return true;
+        }
+        return false;
+    }
+
+    /**When the zipper expires: knives and blades cut the mob up from the inside and make it bleed.*/
+    private void onExpire(LivingEntity mob, ItemStack stack) {
+        Item item = stack.getItem();
+        if (item instanceof KnifeItem || item instanceof SwordItem || item instanceof AxeItem) {
+            Player owner = getOwnerPlayer();
+            DamageSource source = owner != null
+                    ? ModDamageTypes.of(this.level(), ModDamageTypes.STAND, this, owner)
+                    : ModDamageTypes.of(this.level(), ModDamageTypes.STAND, this);
+            mob.hurt(source, 3.0F);
+            MainUtil.makeBleed(mob, 2, 200, owner != null ? owner : this);
+        }
+    }
+
+    /**Pops what is left of the item out of the mob and closes the zipper.*/
+    private void finishMob(LivingEntity mob) {
+        popAll(mob.position());
+        sparks(mob.position().add(0, mob.getBbHeight() / 2, 0), 10);
+        this.level().playSound(null, mob.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 0.9F, 1.1F);
+        close();
+    }
+
+    /**-------------------------------------------------------------------
+     * ITEMS
+     * ------------------------------------------------------------------*/
+
+    private void popStack(Vec3 pos, ItemStack stack) {
+        if (stack.isEmpty()) {
+            return;
+        }
+        ItemEntity item = new ItemEntity(this.level(), pos.x, pos.y + 0.5D, pos.z, stack);
+        item.setDefaultPickUpDelay();
+        this.level().addFreshEntity(item);
+    }
+
+    /**Pops every item inside*/
+    private void popAll(Vec3 pos) {
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            popStack(pos, container.getItem(i));
+        }
+        container.clearContent();
+    }
+
+    private void sparks(Vec3 pos, int count) {
+        if (this.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, pos.x, pos.y, pos.z, count, 0.3D, 0.4D, 0.3D, 0.02D);
         }
     }
 
     @Override
     public void remove(RemovalReason reason) {
-        if (!this.level().isClientSide() && reason == RemovalReason.KILLED && !container.isEmpty()) {
-            Containers.dropContents(this.level(), this.blockPosition(), container);
-            container.clearContent();
+        if (!this.level().isClientSide() && reason.shouldDestroy() && !container.isEmpty()) {
+            popAll(this.position());
         }
         super.remove(reason);
     }
@@ -262,52 +343,23 @@ public class ZipperStorageEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
-        if (tag.hasUUID("owner")) {
-            ownerUUID = tag.getUUID("owner");
+        super.readAdditionalSaveData(tag);
+        mobMode = tag.getBoolean("mobMode");
+        mobTicks = tag.getInt("mobTicks");
+        if (tag.hasUUID("mobUUID")) {
+            mobUUID = tag.getUUID("mobUUID");
         }
-        anchor = new BlockPos(tag.getInt("ax"), tag.getInt("ay"), tag.getInt("az"));
-        blockId = tag.getString("block");
-        this.entityData.set(FACE, tag.getInt("face"));
-        container.fromTag(tag.getList("items", 10));
+        container.fromTag(tag.getList("items", Tag.TAG_COMPOUND));
     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
-        if (ownerUUID != null) {
-            tag.putUUID("owner", ownerUUID);
+        super.addAdditionalSaveData(tag);
+        tag.putBoolean("mobMode", mobMode);
+        tag.putInt("mobTicks", mobTicks);
+        if (mobUUID != null) {
+            tag.putUUID("mobUUID", mobUUID);
         }
-        tag.putInt("ax", anchor.getX());
-        tag.putInt("ay", anchor.getY());
-        tag.putInt("az", anchor.getZ());
-        tag.putString("block", blockId);
-        tag.putInt("face", this.entityData.get(FACE));
         tag.put("items", container.createTag());
-    }
-
-    /**The one row of items. It tells the entity when somebody opens or closes it.*/
-    private static class ZipperContainer extends SimpleContainer {
-        private final ZipperStorageEntity storage;
-
-        ZipperContainer(ZipperStorageEntity storage) {
-            super(SLOTS);
-            this.storage = storage;
-        }
-
-        @Override
-        public boolean stillValid(Player player) {
-            return !storage.isRemoved() && player.distanceToSqr(storage) <= 64.0D;
-        }
-
-        @Override
-        public void startOpen(Player player) {
-            storage.viewers++;
-            storage.updateOpen();
-        }
-
-        @Override
-        public void stopOpen(Player player) {
-            storage.viewers = Math.max(0, storage.viewers - 1);
-            storage.updateOpen();
-        }
     }
 }

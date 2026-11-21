@@ -2,65 +2,64 @@ package net.hydra.jojomod.entity.objects;
 
 import net.hydra.jojomod.entity.ModEntities;
 import net.hydra.jojomod.entity.stand.StandEntity;
-import net.hydra.jojomod.event.powers.StandUser;
-import net.minecraft.core.BlockPos;
+import net.hydra.jojomod.event.powers.ModDamageTypes;
+import net.minecraft.core.Direction;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
-/**A chunk of block launched by Sticky Fingers' Zipper Barrage (Sneak + Z).
- * It flies, deals light stand damage to the first time it touches each living thing, and shatters when it lands.
- * Weaker blocks (dirt) make weaker debris, see {@link #damageForBlock}.*/
+/**A chunk of block launched out of a wall by Sticky Fingers' Sneak+Z zippers.
+ * It flies like a projectile and does light stand damage to whoever it hits.*/
 public class ZipperDebrisEntity extends Entity {
-
-    public static final int MAX_LIFE = 80;
 
     protected static final EntityDataAccessor<BlockState> BLOCK = SynchedEntityData.defineId(ZipperDebrisEntity.class,
             EntityDataSerializers.BLOCK_STATE);
 
+    public static final int MAX_LIFE = 60;
+
     private UUID ownerUUID = null;
-    private float damage = 1.0F;
-    private final Set<UUID> alreadyHit = new HashSet<>();
+    private float damage = 1.5F;
+    private int life = 0;
 
     public ZipperDebrisEntity(EntityType<?> type, Level level) {
         super(type, level);
     }
 
-    /**Debris damage grows with how hard the block was, but always stays "light".*/
-    public static float damageForBlock(float hardness) {
-        float h = Math.max(hardness, 0.0F);
-        return Math.min(0.6F + h * 0.45F, 3.0F);
-    }
-
-    public static ZipperDebrisEntity create(Level level, LivingEntity owner, BlockState state, Vec3 pos, Vec3 velocity,
-                                            float damage) {
+    public static void launch(ServerLevel level, UUID owner, BlockState state, Vec3 pos, Direction face, float damage) {
         ZipperDebrisEntity debris = new ZipperDebrisEntity(ModEntities.ZIPPER_DEBRIS, level);
-        debris.entityData.set(BLOCK, state);
-        debris.ownerUUID = owner == null ? null : owner.getUUID();
+        debris.ownerUUID = owner;
         debris.damage = damage;
+        debris.entityData.set(BLOCK, state);
         debris.setPos(pos.x, pos.y, pos.z);
-        debris.setDeltaMovement(velocity);
-        return debris;
+        if (face.getAxis() == Direction.Axis.Y) {
+            //from the floor/ceiling the debris pops up (or down) a few blocks and falls back on whoever is there
+            double vertical = (0.35D + level.random.nextDouble() * 0.25D) * face.getStepY();
+            debris.setDeltaMovement((level.random.nextDouble() - 0.5D) * 0.36D, vertical,
+                    (level.random.nextDouble() - 0.5D) * 0.36D);
+        } else {
+            double speed = 0.55D + level.random.nextDouble() * 0.35D;
+            Vec3 out = new Vec3(face.getStepX(), face.getStepY(), face.getStepZ()).scale(speed);
+            debris.setDeltaMovement(out.add((level.random.nextDouble() - 0.5D) * 0.35D,
+                    0.12D + level.random.nextDouble() * 0.2D, (level.random.nextDouble() - 0.5D) * 0.35D));
+        }
+        level.addFreshEntity(debris);
     }
 
     @Override
@@ -73,91 +72,66 @@ public class ZipperDebrisEntity extends Entity {
     }
 
     @Override
-    public boolean isNoGravity() {
-        return true;
-    }
-
-    @Override
     public boolean isPickable() {
         return false;
     }
 
     @Override
-    public boolean canBeHitByProjectile() {
+    public boolean shouldBeSaved() {
         return false;
-    }
-
-    private Entity getOwner() {
-        if (ownerUUID != null && this.level() instanceof ServerLevel serverLevel) {
-            return serverLevel.getEntity(ownerUUID);
-        }
-        return null;
     }
 
     @Override
     public void tick() {
         super.tick();
-        //gravity is done by hand so the arc looks the same on both sides
-        Vec3 motion = this.getDeltaMovement().add(0.0D, -0.05D, 0.0D);
-        this.move(MoverType.SELF, motion);
-        this.setDeltaMovement(motion.scale(0.98D));
-
+        life++;
+        Vec3 motion = this.getDeltaMovement();
+        this.setDeltaMovement(motion.x * 0.99D, motion.y - 0.04D, motion.z * 0.99D);
+        this.move(MoverType.SELF, this.getDeltaMovement());
         if (this.level().isClientSide()) {
             return;
         }
-        if (this.tickCount > 2) {
-            hitNearby();
+        List<LivingEntity> targets = this.level().getEntitiesOfClass(LivingEntity.class,
+                this.getBoundingBox().inflate(0.2D), this::canHit);
+        if (!targets.isEmpty()) {
+            hit(targets.get(0));
+            burst();
+            return;
         }
-        if (this.onGround() || this.horizontalCollision || this.verticalCollision || this.tickCount > MAX_LIFE) {
-            shatter();
-        }
-    }
-
-    private void hitNearby() {
-        Entity owner = getOwner();
-        for (LivingEntity target : this.level().getEntitiesOfClass(LivingEntity.class,
-                this.getBoundingBox().inflate(0.2D))) {
-            if (target == owner || target instanceof StandEntity || !target.isAlive()
-                    || alreadyHit.contains(target.getUUID())) {
-                continue;
-            }
-            alreadyHit.add(target.getUUID());
-            if (owner instanceof LivingEntity livingOwner) {
-                ((StandUser) livingOwner).roundabout$getStandPowers()
-                        .StandDamageEntityAttack(target, damage, 0.1F, livingOwner);
-            } else {
-                target.hurt(this.damageSources().generic(), damage);
-            }
+        if (life > 3 && (this.onGround() || this.horizontalCollision || this.verticalCollision || life > MAX_LIFE)) {
+            burst();
         }
     }
 
-    private void shatter() {
+    private boolean canHit(LivingEntity entity) {
+        return entity.isAlive() && !entity.isSpectator() && !(entity instanceof StandEntity)
+                && (ownerUUID == null || !ownerUUID.equals(entity.getUUID()));
+    }
+
+    private void hit(LivingEntity target) {
+        Entity owner = ownerUUID == null ? null : this.level().getPlayerByUUID(ownerUUID);
+        DamageSource source = owner != null
+                ? ModDamageTypes.of(this.level(), ModDamageTypes.STAND, this, owner)
+                : ModDamageTypes.of(this.level(), ModDamageTypes.STAND, this);
+        target.hurt(source, damage);
+    }
+
+    private void burst() {
+        BlockState state = getBlockState();
         if (this.level() instanceof ServerLevel serverLevel) {
-            BlockState state = getBlockState();
             serverLevel.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, state),
-                    this.getX(), this.getY() + 0.1D, this.getZ(), 8, 0.15D, 0.1D, 0.15D, 0.05D);
-            serverLevel.playSound(null, BlockPos.containing(this.position()), state.getSoundType().getBreakSound(),
-                    SoundSource.BLOCKS, 0.5F, 1.2F);
+                    this.getX(), this.getY() + 0.2D, this.getZ(), 10, 0.15D, 0.15D, 0.15D, 0.05D);
+            serverLevel.playSound(null, this.blockPosition(), state.getSoundType().getBreakSound(),
+                    SoundSource.BLOCKS, 0.6F, 1.1F);
         }
         this.discard();
     }
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
-        if (tag.hasUUID("owner")) {
-            ownerUUID = tag.getUUID("owner");
-        }
-        damage = tag.getFloat("damage");
-        Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(tag.getString("block")));
-        this.entityData.set(BLOCK, block.defaultBlockState());
     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
-        if (ownerUUID != null) {
-            tag.putUUID("owner", ownerUUID);
-        }
-        tag.putFloat("damage", damage);
-        tag.putString("block", BuiltInRegistries.BLOCK.getKey(getBlockState().getBlock()).toString());
     }
 }

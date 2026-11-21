@@ -253,7 +253,6 @@ public class ModEntities {
     public static EntityType<ZipperEntity> ZIPPER;
     public static EntityType<ZipperDebrisEntity> ZIPPER_DEBRIS;
     public static EntityType<ZipperStorageEntity> ZIPPER_STORAGE;
-    public static EntityType<ZipperPouchEntity> ZIPPER_POUCH;
     public static EntityType<JJFProjectileEntity> JJF_PROJECTILE;
     public static EntityType<JJFGunpowderCloudEntity> JJF_GUNPOWDER_CLOUD;
     public static EntityType<JJFSpitEntity> JJF_SPIT;

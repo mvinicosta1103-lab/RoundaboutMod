@@ -1006,7 +1006,6 @@ public class ForgeEvents {
         ModEntities.ZIPPER = ForgeEntities.ZIPPER.get();
         ModEntities.ZIPPER_DEBRIS = ForgeEntities.ZIPPER_DEBRIS.get();
         ModEntities.ZIPPER_STORAGE = ForgeEntities.ZIPPER_STORAGE.get();
-        ModEntities.ZIPPER_POUCH = ForgeEntities.ZIPPER_POUCH.get();
         ModEntities.WHITESNAKE = ForgeEntities.WHITESNAKE.get();
         ModEntities.HALLUCINATORY_ACID_PROJECTILE = ForgeEntities.HALLUCINATORY_ACID_PROJECTILE.get();
         ModEntities.D4C = ForgeEntities.D4C.get();
