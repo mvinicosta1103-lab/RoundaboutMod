@@ -99,12 +99,20 @@ public class PowersStickyFingers extends NewPunchingStand {
     @Override
     public List<Byte> getSkinList() {
         List<Byte> list = Lists.newArrayList();
-        list.add(StickyFingersEntity.RED);
+        list.add(StickyFingersEntity.PART_5);
+        list.add(StickyFingersEntity.MANGA_SKIN);
+        list.add(StickyFingersEntity.BLACK_AND_WHITE);
         return list;
     }
 
     @Override
     public Component getSkinName(byte skinId) {
+        if (skinId == StickyFingersEntity.MANGA_SKIN) {
+            return Component.translatable("skins.roundabout.sticky_fingers.manga");
+        }
+        if (skinId == StickyFingersEntity.BLACK_AND_WHITE) {
+            return Component.translatable("skins.roundabout.sticky_fingers.black_and_white");
+        }
         return Component.translatable("skins.roundabout.sticky_fingers.base");
     }
 

@@ -1002,6 +1002,7 @@ public class ForgeEvents {
         ModEntities.THE_WORLD = ForgeEntities.THE_WORLD.get();
         ModEntities.THE_WORLD_ULTIMATE = ForgeEntities.THE_WORLD_ULTIMATE.get();
         ModEntities.KING_CRIMSON = ForgeEntities.KING_CRIMSON.get();
+        ModEntities.STICKY_FINGERS = ForgeEntities.STICKY_FINGERS.get();
         ModEntities.ZIPPER = ForgeEntities.ZIPPER.get();
         ModEntities.WHITESNAKE = ForgeEntities.WHITESNAKE.get();
         ModEntities.HALLUCINATORY_ACID_PROJECTILE = ForgeEntities.HALLUCINATORY_ACID_PROJECTILE.get();

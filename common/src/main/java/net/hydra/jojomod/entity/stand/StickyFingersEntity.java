@@ -10,7 +10,9 @@ public class StickyFingersEntity extends FollowingStandEntity {
         super(entityType, world);
     }
     public static final byte
-            RED = 1;
+            PART_5 = 1,
+            MANGA_SKIN = 2,
+            BLACK_AND_WHITE = 3;
 
 
     public final AnimationState finalPunch = new AnimationState();
