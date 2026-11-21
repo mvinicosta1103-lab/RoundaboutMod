@@ -103,6 +103,8 @@ public class ClientForgeEvents {
         event.registerEntityRenderer(ForgeEntities.THE_WORLD_ULTIMATE.get(), TheWorldUltimateRenderer::new);
         event.registerEntityRenderer(ForgeEntities.KING_CRIMSON.get(), KingCrimsonRenderer::new);
         event.registerEntityRenderer(ForgeEntities.STICKY_FINGERS.get(), StickyFingersRenderer::new);
+        event.registerEntityRenderer(ForgeEntities.ZIPPER_STORAGE.get(), ZipperStorageRenderer::new);
+        event.registerEntityRenderer(ForgeEntities.ZIPPER_POUCH.get(), NoopRenderer::new);
         event.registerEntityRenderer(ForgeEntities.WHITESNAKE.get(), WhitesnakeRenderer::new);
         event.registerEntityRenderer(ForgeEntities.HALLUCINATORY_ACID_PROJECTILE.get(), HallucinatoryAcidProjectileRenderer::new);
         event.registerEntityRenderer(ForgeEntities.D4C.get(), D4CRenderer::new);

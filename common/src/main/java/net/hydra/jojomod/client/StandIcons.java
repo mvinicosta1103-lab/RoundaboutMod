@@ -660,6 +660,16 @@ public class StandIcons {
             "textures/gui/icons/sticky_fingers/zipper_mass.png");
     public static final ResourceLocation STICKY_FINGERS_ZIPPER_STORAGE = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/sticky_fingers/zipper_storage.png");
+    public static final ResourceLocation STICKY_FINGERS_PUNCH = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/punch.png");
+    public static final ResourceLocation STICKY_FINGERS_GUARD = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/guard.png");
+    public static final ResourceLocation STICKY_FINGERS_BARRAGE = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/barrage.png");
+    public static final ResourceLocation STICKY_FINGERS_FIST = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/fist.png");
+    public static final ResourceLocation STICKY_FINGERS_VAULT = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/vault.png");
 
     public static final ResourceLocation MANDOM_VISION_ON = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/mandom/vision_on.png");

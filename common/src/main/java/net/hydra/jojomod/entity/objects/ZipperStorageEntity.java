@@ -3,6 +3,7 @@ package net.hydra.jojomod.entity.objects;
 import net.hydra.jojomod.entity.ModEntities;
 import net.hydra.jojomod.event.ModGamerules;
 import net.hydra.jojomod.event.ModParticles;
+import net.hydra.jojomod.event.powers.StandUser;
 import net.hydra.jojomod.event.powers.ModDamageTypes;
 import net.hydra.jojomod.item.KnifeItem;
 import net.hydra.jojomod.util.MainUtil;
@@ -17,6 +18,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -59,6 +61,9 @@ public class ZipperStorageEntity extends ZipperEntity {
     /**How long an item stays inside a mob (ticks)*/
     public static final int MOB_ITEM_LIFE = 600;
 
+    /**Hitbox size (square, in blocks) of the storage zipper. The renderer centers the zipper on it.*/
+    public static final float SIZE = 1.0F;
+
     /**The item stuffed in a mob (MOB mode only). The block storage lives in ZipperStorageData.*/
     private final SimpleContainer container = new SimpleContainer(1);
     /**Players that have the storage open right now, the zipper stays unzipped while there are any*/
@@ -68,6 +73,10 @@ public class ZipperStorageEntity extends ZipperEntity {
     private UUID mobUUID = null;
     private int mobTicks = 0;
     private boolean mounted = false;
+
+    /**Client only: how unzipped the zipper looks (0 = closed, 1 = open), used by ZipperStorageRenderer*/
+    private float openAnim = 0.0F;
+    private float prevOpenAnim = 0.0F;
 
     public ZipperStorageEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -106,6 +115,41 @@ public class ZipperStorageEntity extends ZipperEntity {
 
     public UUID getMobUUID() {
         return mobUUID;
+    }
+
+    /**-------------------------------------------------------------------
+     * CLIENT HELPERS (used by ZipperStorageRenderer)
+     * ------------------------------------------------------------------*/
+
+    /**Only people with a stand can see (and use) the storage zippers.
+     * Takes a Player (LocalPlayer is a Player) so this common class never needs the client-only class.*/
+    public static boolean isStandUser(Player player) {
+        return player != null && ((StandUser) player).roundabout$hasAStand();
+    }
+
+    /**The free space in front of the zipper, where the light is read from.*/
+    public BlockPos getFrontPos() {
+        return mobMode ? this.blockPosition() : this.anchor.relative(this.getFace());
+    }
+
+    public float getOpenAnim() {
+        return openAnim;
+    }
+
+    public float getPrevOpenAnim() {
+        return prevOpenAnim;
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.level().isClientSide()) {
+            //unzips while somebody has the storage open, zips back up when they stop
+            prevOpenAnim = openAnim;
+            float target = getState() == STATE_STORAGE_OPEN ? 1.0F : 0.0F;
+            float step = 1.0F / OPEN_ANIM_TICKS;
+            openAnim = Mth.clamp(openAnim + Mth.clamp(target - openAnim, -step, step), 0.0F, 1.0F);
+        }
     }
 
     /**-------------------------------------------------------------------

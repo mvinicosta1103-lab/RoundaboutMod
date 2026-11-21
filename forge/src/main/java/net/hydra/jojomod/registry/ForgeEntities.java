@@ -909,10 +909,18 @@ public class ForgeEntities {
     public static final RegistryObject<EntityType<ZipperStorageEntity>> ZIPPER_STORAGE =
             ENTITY_TYPES.register("zipper_storage", () ->
                     EntityType.Builder.<ZipperStorageEntity>of(ZipperStorageEntity::new, MobCategory.MISC)
-                            .sized(0.9F, 1.0F).
+                            .sized(ZipperStorageEntity.SIZE, ZipperStorageEntity.SIZE).
                             clientTrackingRange(10)
                             .updateInterval(1).
                             build(new ResourceLocation(Roundabout.MOD_ID, "zipper_storage").toString())
+            );
+    public static final RegistryObject<EntityType<ZipperPouchEntity>> ZIPPER_POUCH =
+            ENTITY_TYPES.register("zipper_pouch", () ->
+                    EntityType.Builder.<ZipperPouchEntity>of(ZipperPouchEntity::new, MobCategory.MISC)
+                            .sized(0.2F, 0.2F).
+                            clientTrackingRange(8)
+                            .updateInterval(1).
+                            build(new ResourceLocation(Roundabout.MOD_ID, "zipper_pouch").toString())
             );
     public static final RegistryObject<EntityType<FallingBannerEntity>> FALLING_BANNER =
             ENTITY_TYPES.register("falling_banner", () ->
