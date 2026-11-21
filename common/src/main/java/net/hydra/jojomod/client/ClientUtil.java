@@ -13,7 +13,6 @@ import net.hydra.jojomod.client.gui.diverdown.*;
 import net.hydra.jojomod.client.models.layers.anubis.AnubisLayer;
 import net.hydra.jojomod.client.models.visages.parts.FirstPersonArmsModel;
 import net.hydra.jojomod.client.models.visages.parts.FirstPersonArmsSlimModel;
-import net.hydra.jojomod.entity.KingCrimsonCloneEntity;
 import net.hydra.jojomod.entity.KingCrimsonProjectionEntity;
 import net.hydra.jojomod.entity.TickableSoundInstances.RoadRollerAmbientSound;
 import net.hydra.jojomod.entity.TickableSoundInstances.RoadRollerExplosionSound;
@@ -40,7 +39,6 @@ import net.hydra.jojomod.item.*;
 import net.hydra.jojomod.entity.TickableSoundInstances.BowlerHatFlyingSound;
 import net.hydra.jojomod.menu.GamblingTableMenu;
 import net.hydra.jojomod.menu.gambling_games.CoinDropGame;
-import net.hydra.jojomod.platform.ClientServices;
 import net.hydra.jojomod.powers.GeneralPowers;
 import net.hydra.jojomod.powers.power_types.PunchingGeneralPowers;
 import net.hydra.jojomod.powers.power_types.VampireGeneralPowers;
@@ -67,10 +65,8 @@ import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleType;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.hydra.jojomod.networking.ServerToClientPackets;
@@ -87,6 +83,8 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.animal.allay.Allay;
+import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.item.*;
 import net.hydra.jojomod.entity.corpses.FallenMob;
@@ -466,7 +464,7 @@ public class ClientUtil {
         }
     }
 
-    public static void preRenderGrabbedSoul(BlackSabbathEntity ent, StandEntity se, double $$1, double $$2, double $$3, float $$4, PoseStack pose, MultiBufferSource $$6) {
+    public static void preRenderGrabbedSoul(BlackSabbathEntity ent, StandEntity se, Entity allayVex , double $$1, double $$2, double $$3, float $$4, PoseStack pose, MultiBufferSource $$6) {
         float lerpYRot = (float) ((ILivingEntityAccess)ent).roundabout$getLerpYRot();
         ent.yRotO = lerpYRot;
         ent.setYRot(lerpYRot);
@@ -475,7 +473,13 @@ public class ClientUtil {
         LivingEntity user = ent.getUser();
         LivingEntity user2 = ent.getUser();
         if (user != null){
-            ent.travelAheadSoulRender($$4, se);
+            if(se != null) {
+                ent.travelAheadSoulRender($$4, se, null);
+            } else {
+                if(allayVex != null && (allayVex instanceof Allay || allayVex instanceof Vex)) {
+                    ent.travelAheadSoulRender($$4, null, allayVex);
+                }
+            }
         }
     }
 
@@ -1104,6 +1108,32 @@ public class ClientUtil {
                         }
                     }
                 }
+                else if (message.equals(ServerToClientPackets.S2CPackets.MESSAGES.SyncKqInflaton.value)) {
+                    Player pl = Minecraft.getInstance().player;
+
+                    if (pl != null && pl.level() != null) {
+                        int targetID = (int) vargs[0];
+                        int inflation = (int) vargs[1];
+                        if (pl.level().getEntity(targetID) instanceof LivingEntity LE) {
+                            ((StandUser)LE).roundabout$setExplosionInflation(inflation);
+                        }
+                    }
+                }
+
+                else if (message.equals(ServerToClientPackets.S2CPackets.MESSAGES.KnAddItemContainer.value)) {
+                    BlockPos pos = (BlockPos) vargs[0];
+                    BlockPos pos2 = (BlockPos) vargs[1];
+                    if (((StandUser) player).roundabout$getStandPowers() instanceof PowersKingNothing pkn) {
+                        pkn.addItemBlockPos(pos, pos2);
+                    }
+                }
+
+                else if (message.equals(ServerToClientPackets.S2CPackets.MESSAGES.KnRemoveItemContainer.value)) {
+                    BlockPos pos = (BlockPos) vargs[0];
+                    if (((StandUser) player).roundabout$getStandPowers() instanceof PowersKingNothing pkn) {
+                        pkn.removeItemBlockPos(pos);
+                    }
+                }
 
                 // theoretical deregister dynamic worlds packet
                 // String name = buf.readUtf();
@@ -1243,6 +1273,12 @@ public class ClientUtil {
             if (user.roundabout$getStandPowers() instanceof PowersCalifornia ckb){
                 ckb.leadedInt = data;
             }
+        } else if (context == PacketDataIndex.S2C_IN_PURPLE_HAZE_TICKS) {
+            ((StandUser) player).SetInPurpleHazeTicks(data);
+        } else if (context == PacketDataIndex.S2C_IN_DISTORTION_HAZE_TICKS) {
+            ((StandUser) player).SetInDistortionHazeTicks(data);
+        } else if (context == PacketDataIndex.S2C_PURPLE_HAZE_SKIN) {
+            ((StandUser) player).SetPurpleHazeSkin((byte)data);
         } else if (context == PacketDataIndex.S2C_INT_LVL_DECREASE) {
             IPlayerEntity ipe = ((IPlayerEntity) player);
             ipe.rdbt$setLevelDecreaseTicks(data);
@@ -1250,6 +1286,22 @@ public class ClientUtil {
             StandUser user = ((StandUser) player);
             if (user.roundabout$getStandPowers() instanceof PowersKingCrimson ckb){
                 ckb.disengageTargetInt = data;
+            }
+        } else if (context == PacketDataIndex.S2C_KN_ADD_HIGHLIGHT_ENTITY) {
+            if (((StandUser) player).roundabout$getStandPowers() instanceof PowersKingNothing kn) {
+                kn.addItemEntity(data);
+            }
+        } else if (context == PacketDataIndex.S2C_KN_REMOVE_HIGHLIGHT_ENTITY) {
+            if (((StandUser) player).roundabout$getStandPowers() instanceof PowersKingNothing kn) {
+                kn.removeItemEntity(data);
+            }
+        } else if (context == PacketDataIndex.S2C_KN_SYNC_FORM_PREDICT_BLOCK) {
+            if (((StandUser) player).roundabout$getStandPowers() instanceof PowersKingNothing kn) {
+                kn.setMemorizedScent(BuiltInRegistries.BLOCK.byId(data));
+            }
+        } else if (context == PacketDataIndex.S2C_KN_SYNC_FORM_PREDICT_ENTITY) {
+            if (((StandUser) player).roundabout$getStandPowers() instanceof PowersKingNothing kn) {
+                kn.setMemorizedScent(BuiltInRegistries.ENTITY_TYPE.byId(data));
             }
         }
     }

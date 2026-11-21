@@ -2,6 +2,7 @@ package net.hydra.jojomod.registry;
 
 import net.hydra.jojomod.Roundabout;
 import net.hydra.jojomod.particles.HazeColorParticleOptions;
+import net.hydra.jojomod.particles.PuzzleColorParticleOptions;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraftforge.registries.DeferredRegister;
@@ -332,6 +333,14 @@ public class ForgeParticles {
             "mold",
             () -> new SimpleParticleType(true)
     );
+    public static final RegistryObject<SimpleParticleType> BLACK_SABBATH_MOVING_RIPPLE = PARTICLES.register(
+            "black_sabbath_moving_ripple",
+            () -> new SimpleParticleType(true)
+    );
+    public static final RegistryObject<SimpleParticleType> BLACK_SABBATH_IDLE_RIPPLE = PARTICLES.register(
+            "black_sabbath_idle_ripple",
+            () -> new SimpleParticleType(true)
+    );
     public static final RegistryObject<SimpleParticleType> PW_FIREBALL_EXPLOSION = PARTICLES.register(
             "pw_fireball_explosion",
             () -> new SimpleParticleType(true)
@@ -362,6 +371,14 @@ public class ForgeParticles {
                 @Override
                 public com.mojang.serialization.Codec<HazeColorParticleOptions> codec() {
                     return HazeColorParticleOptions.codec(this);
+                }
+            });
+
+    public static final RegistryObject<ParticleType<PuzzleColorParticleOptions>> PUZZLE_PARTICLE =
+            PARTICLES.register("kn_piece", () -> new ParticleType<>(false, PuzzleColorParticleOptions.DESERIALIZER) {
+                @Override
+                public com.mojang.serialization.Codec<PuzzleColorParticleOptions> codec() {
+                    return PuzzleColorParticleOptions.codec(this);
                 }
             });
 
@@ -452,4 +469,9 @@ public class ForgeParticles {
             () -> new SimpleParticleType(true));
     public static final RegistryObject<SimpleParticleType> GE_WAVE = PARTICLES.register("ge_wave",
             () -> new SimpleParticleType(true));
+
+    public static final RegistryObject<SimpleParticleType> RAIN_BUBBLE = PARTICLES.register(
+            "rain_bubble",
+            () -> new SimpleParticleType(true)
+    );
 }

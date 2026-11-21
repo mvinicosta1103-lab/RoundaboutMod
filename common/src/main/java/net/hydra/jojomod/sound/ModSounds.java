@@ -1440,6 +1440,16 @@ public class ModSounds {
     public static final String CINDERELLA_VISAGE_CREATION = "cinderella_visage_creation";
     public static final ResourceLocation CINDERELLA_VISAGE_CREATION_ID = new ResourceLocation(Roundabout.MOD_ID+":"+CINDERELLA_VISAGE_CREATION);
     public static SoundEvent CINDERELLA_VISAGE_CREATION_EVENT = SoundEvent.createVariableRangeEvent(CINDERELLA_VISAGE_CREATION_ID);
+    
+    public static final String KING_NOTHING_SUMMON = "king_nothing_summon";
+    public static final ResourceLocation KING_NOTHING_SUMMON_ID = Roundabout.location(KING_NOTHING_SUMMON);
+    public static SoundEvent KING_NOTHING_SUMMON_EVENT = SoundEvent.createVariableRangeEvent(KING_NOTHING_SUMMON_ID);
+    public static final String KING_NOTHING_PHASE = "king_nothing_phase";
+    public static final ResourceLocation KING_NOTHING_PHASE_ID = Roundabout.location(KING_NOTHING_PHASE);
+    public static SoundEvent KING_NOTHING_PHASE_EVENT = SoundEvent.createVariableRangeEvent(KING_NOTHING_PHASE_ID);
+    public static final String KING_NOTHING_DESUMMON = "king_nothing_desummon";
+    public static final ResourceLocation KING_NOTHING_DESUMMON_ID = Roundabout.location(KING_NOTHING_DESUMMON);
+    public static SoundEvent KING_NOTHING_DESUMMON_EVENT = SoundEvent.createVariableRangeEvent(KING_NOTHING_DESUMMON_ID);
 
 
     public static final String PLANET_WAVES_SUMMON = "planet_waves_summon";
@@ -2213,6 +2223,27 @@ public class ModSounds {
     public static final String GOLD_EXPERIENCE_LIFE_PUNCH = "ge_life_punch";
     public static final ResourceLocation GOLD_EXPERIENCE_LIFE_PUNCH_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_LIFE_PUNCH);
     public static SoundEvent GOLD_EXPERIENCE_LIFE_PUNCH_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_LIFE_PUNCH_ID);
+    public static final String GOLD_EXPERIENCE_MUDA_RUSH = "ge_muda_rush";
+    public static final ResourceLocation GOLD_EXPERIENCE_MUDA_RUSH_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_MUDA_RUSH);
+    public static SoundEvent GOLD_EXPERIENCE_MUDA_RUSH_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_MUDA_RUSH_ID);
+    public static final String GOLD_EXPERIENCE_MUDA = "ge_muda";
+    public static final ResourceLocation GOLD_EXPERIENCE_MUDA_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_MUDA);
+    public static SoundEvent GOLD_EXPERIENCE_MUDA_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_MUDA_ID);
+    public static final String GOLD_EXPERIENCE_DNA_GROW = "ge_dna_grow";
+    public static final ResourceLocation GOLD_EXPERIENCE_DNA_GROW_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_DNA_GROW);
+    public static SoundEvent GOLD_EXPERIENCE_DNA_GROW_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_DNA_GROW_ID);
+    public static final String GOLD_EXPERIENCE_MENU = "ge_menu";
+    public static final ResourceLocation GOLD_EXPERIENCE_MENU_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_MENU);
+    public static SoundEvent GOLD_EXPERIENCE_MENU_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_MENU_ID);
+    public static final String GOLD_EXPERIENCE_SPIKES = "ge_spikes";
+    public static final ResourceLocation GOLD_EXPERIENCE_SPIKES_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_SPIKES);
+    public static SoundEvent GOLD_EXPERIENCE_SPIKES_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_SPIKES_ID);
+    public static final String GOLD_EXPERIENCE_TREE = "ge_tree";
+    public static final ResourceLocation GOLD_EXPERIENCE_TREE_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_TREE);
+    public static SoundEvent GOLD_EXPERIENCE_TREE_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_TREE_ID);
+    public static final String GOLD_EXPERIENCE_VINE = "ge_vine";
+    public static final ResourceLocation GOLD_EXPERIENCE_VINE_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GOLD_EXPERIENCE_VINE);
+    public static SoundEvent GOLD_EXPERIENCE_VINE_EVENT = SoundEvent.createVariableRangeEvent(GOLD_EXPERIENCE_VINE_ID);
 
     public static final String GE_REQUIEM_ARROW = "ge_requiem_obtain";
     public static final ResourceLocation GE_REQUIEM_ARROW_ID = new ResourceLocation(Roundabout.MOD_ID+":"+GE_REQUIEM_ARROW);
@@ -2886,6 +2917,12 @@ public class ModSounds {
     public static final String CTR_RAIN_STEP_3 = "ctr_rain_step_3";
     public static final ResourceLocation CTR_RAIN_STEP_3_ID = new ResourceLocation(Roundabout.MOD_ID+":"+CTR_RAIN_STEP_3);
     public static SoundEvent CTR_RAIN_STEP_3_EVENT = SoundEvent.createVariableRangeEvent(CTR_RAIN_STEP_3_ID);
+    public static final String CTR_BARRIER = "ctr_barrier";
+    public static final ResourceLocation CTR_BARRIER_ID = new ResourceLocation(Roundabout.MOD_ID+":"+CTR_BARRIER);
+    public static SoundEvent CTR_BARRIER_EVENT = SoundEvent.createVariableRangeEvent(CTR_BARRIER_ID);
+    public static final String CTR_FULL_BODY_DODGE = "ctr_full_body_dodge";
+    public static final ResourceLocation CTR_FULL_BODY_DODGE_ID = new ResourceLocation(Roundabout.MOD_ID+":"+CTR_FULL_BODY_DODGE);
+    public static SoundEvent CTR_FULL_BODY_DODGE_EVENT = SoundEvent.createVariableRangeEvent(CTR_FULL_BODY_DODGE_ID);
 
     public static final String ZOMBIEHORSE_STITCHING = "zombiehorse_stitching";
     public static final ResourceLocation ZOMBIEHORSE_STITCHING_ID = new ResourceLocation(Roundabout.MOD_ID+":"+ZOMBIEHORSE_STITCHING);

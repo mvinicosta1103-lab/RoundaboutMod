@@ -20,6 +20,7 @@ import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.entity.stand.TuskEntity;
 import net.hydra.jojomod.event.AbilityIconInstance;
 import net.hydra.jojomod.event.ModEffects;
+import net.hydra.jojomod.event.ModGamerules;
 import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.index.*;
 import net.hydra.jojomod.event.powers.*;
@@ -66,6 +67,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BrushableBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BrushableBlockEntity;
@@ -363,7 +365,7 @@ public class PowersTusk extends NewDashPreset {
                     return !canFlatten();
                 }
                 case 4 -> {
-                    return this.getStandEntity(this.getSelf()) == null;
+                    return this.getStandEntity(this.getSelf()) == null || !this.getSelf().level().getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING);
                 }
             }
         } else if (slot == 2) {
@@ -778,11 +780,11 @@ public class PowersTusk extends NewDashPreset {
                 }
             }
             case PowersTusk.DEATH_PUNCH -> {
-                if (this.getAttackTimeDuring() == 20) {
+                if (this.getAttackTimeDuring() == 30) {
                     if (!isClient()) {
                         deathPunch();
                     }
-                } else if (this.getAttackTimeDuring() > 30) {
+                } else if (this.getAttackTimeDuring() > 40) {
                     deathTarget = null;
                     this.setPowerNone();
                 } else {
@@ -935,7 +937,10 @@ public class PowersTusk extends NewDashPreset {
                     for (int y = -1; y < 2; y++) {
                         BlockPos delta = alignBlockPos(blockPos,i,x,y,dir);
                         BlockState state = this.getSelf().level().getBlockState(delta);
-                        if (!state.isAir() && MainUtil.isDestructible(this.getSelf().level(),blockPos,state)) {
+                        BlockHitResult blockHitResult = new BlockHitResult(delta.getCenter(),dir,delta,false);
+                        if (!state.isAir()
+                                && MainUtil.isDestructible(this.getSelf().level(),blockPos,state)
+                                && MainUtil.canPlaceOnClaim((Player)this.getSelf(),blockHitResult)) {
                             ReturningObjectEntity ret = new ReturningObjectEntity(ModEntities.RETURNING_OBJECT,this.getSelf().level(),delta,start,end);
                             ret.setPos(delta.getCenter());
                             Vec3 kbDir = alignBlockPos(blockPos,0,0,0,dir).getCenter().subtract(alignBlockPos(blockPos,1,0,0,dir).getCenter()).normalize().reverse();
@@ -948,6 +953,7 @@ public class PowersTusk extends NewDashPreset {
                             ret.setState(state);
                             this.getSelf().level().addFreshEntity(ret);
                             this.getSelf().level().destroyBlock(delta,false);
+                            this.getSelf().level().updateNeighborsAt(delta, Blocks.AIR);
 
                         }
                     }
@@ -2318,7 +2324,7 @@ public class PowersTusk extends NewDashPreset {
     private Pair<Direction,Direction> EASTWEST = new Pair<>(Direction.NORTH,Direction.UP);
 
     public void clientWallBreaker() {
-        if (!onCooldown(PowerIndex.SKILL_1) && this.getStandEntity(this.getSelf()) != null) {
+        if (!onCooldown(PowerIndex.SKILL_1) && this.getStandEntity(this.getSelf()) != null && this.getSelf().level().getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING)) {
             tryPower(PowersTusk.WALL_BREAK);
             tryPowerPacket(PowersTusk.WALL_BREAK);
         }
@@ -2865,10 +2871,14 @@ public class PowersTusk extends NewDashPreset {
     public static void buildSkins() {
         for(int i=0;i<PowersTusk.skinLoader.length;i++) {
             ResourceLocation[] skins = new ResourceLocation[4];
+            ResourceLocation[] emissive_skins = new ResourceLocation[4];
             for (int n=0;n<4;n++){
                 skins[n] = new ResourceLocation(Roundabout.MOD_ID,location+(n+1)+ "/" + skinLoader[i] + ".png");
+                emissive_skins[n] = new ResourceLocation(Roundabout.MOD_ID,location+(n+1)+ "/" + skinLoader[i] + "_emissive.png");
+
             }
             SKINS.put((byte)(i+1),skins);
+            EMISSIVE_SKINS.put((byte)(i+1),emissive_skins);
         }
     }
     public static ResourceLocation getSkin(byte skin, int act) {
@@ -2877,6 +2887,15 @@ public class PowersTusk extends NewDashPreset {
             return SKINS.get(MANGA)[act-1];
         }
         ResourceLocation[] skins = SKINS.get(skin);
+        return skins[act-1];
+    }
+    public static ResourceLocation getEmissiveSkin(byte skin, int act) {
+        if (EMISSIVE_SKINS.isEmpty()) {buildSkins();}
+        if (EMISSIVE_SKINS.get(skin) == null) return null;
+        if (skin == 0) {
+            return EMISSIVE_SKINS.get(MANGA)[act-1];
+        }
+        ResourceLocation[] skins = EMISSIVE_SKINS.get(skin);
         return skins[act-1];
     }
 
@@ -2888,48 +2907,51 @@ public class PowersTusk extends NewDashPreset {
 
 
     public static HashMap<Byte,ResourceLocation[]> SKINS = new HashMap<>();
+    public static HashMap<Byte,ResourceLocation[]> EMISSIVE_SKINS = new HashMap<>();
 
     public static final byte
             MANGA = 1,
-            BLUE = 2,
-            RESONANCE = 3,
-            BREAKER = 4,
-            FRIGID = 5,
-            ELEGANT = 6,
-            LEGACY = 7;
+            ANIME = 2,
+            AMETHYST = 3,
+            DARK = 4,
+            GREEN = 5,
+            HAMON = 6,
+            JACK = 7,
+            MAGMA = 8,
+            RUBY = 9,
+            CREAKING = 10;
     private static final String[] skinLoader = {
             "manga",
-            "blue",
-            "resonance",
-            "breaker",
-            "frigid",
-            "elegant",
-            "legacy"
+            "anime",
+            "amethyst",
+            "dark",
+            "green",
+            "hamon",
+            "jack",
+            "magma",
+            "ruby",
+            "creaking"
     };
     @Override
     public List<Byte> getSkinList() {
         return Arrays.asList(
                 MANGA,
-                BLUE,
-                BREAKER,
-                FRIGID,
-                LEGACY
-            //    ELEGANT
-          //      RESONANCE
+                ANIME,
+                AMETHYST,
+                DARK,
+                GREEN,
+                HAMON,
+                JACK,
+                MAGMA,
+                RUBY,
+                CREAKING
         );
     }
     @Override public Component getSkinName(byte skinId) {
-        return switch (skinId)
-        {
-            case BLUE -> Component.translatable("skins.roundabout.tusk.blue");
-            case RESONANCE -> Component.translatable("skins.roundabout.tusk.resonance");
-            case BREAKER -> Component.translatable("skins.roundabout.tusk.breaker");
-            case FRIGID -> Component.translatable("skins.roundabout.tusk.frigid");
-            case ELEGANT -> Component.translatable("skins.roundabout.tusk.elegant");
-            case LEGACY -> Component.translatable("skins.roundabout.tusk.legacy");
-
-            default -> Component.translatable("skins.roundabout.tusk.manga");
-        };
+        if (skinId > 0) {
+            return Component.translatable("skins.roundabout.tusk." + skinLoader[skinId-1] );
+        }
+        return Component.translatable("skins.roundabout.tusk.manga");
     }
 
 

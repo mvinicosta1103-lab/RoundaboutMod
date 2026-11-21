@@ -131,7 +131,7 @@ public abstract class ZItemInHandRenderer {
                 ci.cancel();
             }
 
-            if (user.roundabout$getStandPowers() instanceof PowersSilverChariot PSC && user.roundabout$getCombatMode()) {
+            if (user.roundabout$getStandPowers() instanceof PowersSilverChariot PSC && PowerTypes.hasStandActive(localPlayer) && PowerTypes.hasHandsActive(localPlayer)) {
                 /*
                 poseStack.pushPose();
                 poseStack.translate(0.3, -0.25, -0.7);
@@ -571,10 +571,15 @@ public abstract class ZItemInHandRenderer {
                 }
             } else {
                 if (itemStack.getItem() instanceof StandArrowItem SI){
-                    LivingEntity ME =  MainUtil.homeOnWorthy(abstractClientPlayer.level(),abstractClientPlayer.position(),5);
-                    if (ME != null && SI.isWorthinessType(itemStack,ME)) {
-                        shakeMod = (5-Math.min(5,ME.distanceTo(abstractClientPlayer)))/5;
-
+                    if (((StandUser)abstractClientPlayer).roundabout$getStandPowers() != null) {
+                        if (((StandUser) abstractClientPlayer).roundabout$getStandPowers().shouldStandArrowShake()){
+                            shakeMod = 1;
+                        }
+                    }else {
+                        LivingEntity ME = MainUtil.homeOnWorthy(abstractClientPlayer.level(), abstractClientPlayer.position(), 5);
+                        if ((ME != null && SI.isWorthinessType(itemStack, ME))) {
+                            shakeMod = (5 - Math.min(5, ME.distanceTo(abstractClientPlayer))) / 5;
+                        }
                     }
                 }
             }
