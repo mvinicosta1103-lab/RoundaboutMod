@@ -67,7 +67,7 @@ public class ZipperSparkParticle extends SimpleAnimatedParticle {
 
         public Particle createParticle(SimpleParticleType $$0, ClientLevel $$1, double $$2, double $$3, double $$4, double $$5, double $$6, double $$7) {
             ZipperSparkParticle part = new ZipperSparkParticle($$1, $$2, $$3, $$4, $$5,$$6,$$7, this.sprites);
-            part.setColor(0.85F, 0.92F, 1.0F);
+            part.setColor(1.0F, 0.95F, 0.75F);
             part.setAlpha(0.95F);
             return part;
         }

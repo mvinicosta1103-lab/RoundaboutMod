@@ -16,17 +16,18 @@ import net.minecraft.util.Mth;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
-/**Draws Sticky Fingers' zipper procedurally (no model file): a row of teeth, two flaps of cloth and a dark
+/**Draws Sticky Fingers' zipper procedurally (no model file): a row of golden teeth and a dark
  * opening in between that widens as the zipper unzips. TEMPORARY look until a real model exists.
  *
- * Texture layout (zipper.png, 32x16): 4 cells of 8x16 = [opening | cloth | teeth | slider].*/
+ * Texture layout (zipper.png, 32x16): 4 cells of 8x16 = [opening | (unused) | teeth | slider].
+ * Only the golden teeth, the dark opening and the slider are drawn, there is no cloth.*/
 public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Roundabout.MOD_ID,
             "textures/entity/zipper.png");
 
     private static final int SEGMENTS = 16;
-    private static final float TOOTH_WIDTH = 0.05F;
+    private static final float TOOTH_WIDTH = 0.06F;
 
     public ZipperRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -61,8 +62,7 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         Direction face = entity.getFace();
         boolean flat = face.getAxis() == Direction.Axis.Y;
         float length = flat ? 1.0F : 2.0F;
-        float halfWidth = flat ? 0.5F : 0.45F;
-
+        
         poseStack.pushPose();
         if (flat) {
             poseStack.mulPose(Axis.XP.rotationDegrees(face == Direction.UP ? -90.0F : 90.0F));
@@ -92,12 +92,6 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             //teeth
             quad(consumer, matrix, normal, -gap - TOOTH_WIDTH, y0, -gap, y1, z, 2, light);
             quad(consumer, matrix, normal, gap, y0, gap + TOOTH_WIDTH, y1, z, 2, light);
-            //cloth
-            float clothInner = gap + TOOTH_WIDTH;
-            if (clothInner < halfWidth) {
-                quad(consumer, matrix, normal, -halfWidth, y0, -clothInner, y1, z, 1, light);
-                quad(consumer, matrix, normal, clothInner, y0, halfWidth, y1, z, 1, light);
-            }
         }
         //slider at the top of the opening and its pull tab
         float sliderY = length - 0.22F;

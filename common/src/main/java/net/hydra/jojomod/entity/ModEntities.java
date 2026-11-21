@@ -47,7 +47,7 @@ public class ModEntities {
     public static EntityType<WhitesnakeEntity> WHITESNAKE;
     public static EntityType<D4CEntity> D4C;
     public static EntityType<KingCrimsonEntity> KING_CRIMSON;
-    public static EntityType<StickyFingersEntity> STICKY_FINGERS;
+    public static EntityType<net.hydra.jojomod.entity.stand.StickyFingersEntity> STICKY_FINGERS;
     public static EntityType<ReaperKingCrimsonEntity> KING_CRIMSON_REAPER;
     public static EntityType<StarPlatinumEntity> STAR_PLATINUM;
     public static EntityType<JusticeEntity> JUSTICE;
