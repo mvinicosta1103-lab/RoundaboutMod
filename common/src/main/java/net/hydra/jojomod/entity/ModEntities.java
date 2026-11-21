@@ -47,7 +47,7 @@ public class ModEntities {
     public static EntityType<WhitesnakeEntity> WHITESNAKE;
     public static EntityType<D4CEntity> D4C;
     public static EntityType<KingCrimsonEntity> KING_CRIMSON;
-    public static EntityType<net.hydra.jojomod.entity.stand.StickyFingersEntity> STICKY_FINGERS;
+    public static EntityType<StickyFingersEntity> STICKY_FINGERS;
     public static EntityType<ReaperKingCrimsonEntity> KING_CRIMSON_REAPER;
     public static EntityType<StarPlatinumEntity> STAR_PLATINUM;
     public static EntityType<JusticeEntity> JUSTICE;
@@ -251,6 +251,9 @@ public class ModEntities {
     public static EntityType<StepRuleEntity> STEP_RULE;
     public static EntityType<FallingBannerEntity> FALLING_BANNER;
     public static EntityType<ZipperEntity> ZIPPER;
+    public static EntityType<ZipperDebrisEntity> ZIPPER_DEBRIS;
+    public static EntityType<ZipperStorageEntity> ZIPPER_STORAGE;
+    public static EntityType<ZipperPouchEntity> ZIPPER_POUCH;
     public static EntityType<JJFProjectileEntity> JJF_PROJECTILE;
     public static EntityType<JJFGunpowderCloudEntity> JJF_GUNPOWDER_CLOUD;
     public static EntityType<JJFSpitEntity> JJF_SPIT;

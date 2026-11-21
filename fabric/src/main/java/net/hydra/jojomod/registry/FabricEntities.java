@@ -408,6 +408,38 @@ public class FabricEntities {
                     EntityType.Builder.of(StickyFingersEntity::new, MobCategory.MISC).
                             sized(0.75F, 2.05f).clientTrackingRange(14).build(Roundabout.MOD_ID+":sticky_fingers")
             );
+    public static final EntityType<ZipperEntity> ZIPPER =
+            Registry.register(
+                    BuiltInRegistries.ENTITY_TYPE,
+                    new ResourceLocation(Roundabout.MOD_ID, "zipper"),
+                    EntityType.Builder.<ZipperEntity>of(ZipperEntity::new, MobCategory.MISC)
+                            .sized(0.9F, 2.0F).clientTrackingRange(10).updateInterval(1)
+                            .build(Roundabout.MOD_ID + ":zipper")
+            );
+    public static final EntityType<ZipperDebrisEntity> ZIPPER_DEBRIS =
+            Registry.register(
+                    BuiltInRegistries.ENTITY_TYPE,
+                    new ResourceLocation(Roundabout.MOD_ID, "zipper_debris"),
+                    EntityType.Builder.<ZipperDebrisEntity>of(ZipperDebrisEntity::new, MobCategory.MISC)
+                            .sized(0.3F, 0.3F).clientTrackingRange(8).updateInterval(1)
+                            .build(Roundabout.MOD_ID + ":zipper_debris")
+            );
+    public static final EntityType<ZipperStorageEntity> ZIPPER_STORAGE =
+            Registry.register(
+                    BuiltInRegistries.ENTITY_TYPE,
+                    new ResourceLocation(Roundabout.MOD_ID, "zipper_storage"),
+                    EntityType.Builder.<ZipperStorageEntity>of(ZipperStorageEntity::new, MobCategory.MISC)
+                            .sized(ZipperStorageEntity.SIZE, ZipperStorageEntity.SIZE).clientTrackingRange(10).updateInterval(20)
+                            .build(Roundabout.MOD_ID + ":zipper_storage")
+            );
+    public static final EntityType<ZipperPouchEntity> ZIPPER_POUCH =
+            Registry.register(
+                    BuiltInRegistries.ENTITY_TYPE,
+                    new ResourceLocation(Roundabout.MOD_ID, "zipper_pouch"),
+                    EntityType.Builder.<ZipperPouchEntity>of(ZipperPouchEntity::new, MobCategory.MISC)
+                            .sized(0.2F, 0.2F).clientTrackingRange(8).updateInterval(1)
+                            .build(Roundabout.MOD_ID + ":zipper_pouch")
+            );
     public static final EntityType<WhitesnakeEntity> WHITESNAKE = Registry.register(
             BuiltInRegistries.ENTITY_TYPE, Roundabout.location("whitesnake"),
             EntityType.Builder.of(WhitesnakeEntity::new, MobCategory.MISC)
@@ -1561,6 +1593,10 @@ public class FabricEntities {
                 ModEntities.THE_WORLD = THE_WORLD;
                 ModEntities.KING_CRIMSON = KING_CRIMSON;
                 ModEntities.STICKY_FINGERS = STICKY_FINGERS;
+                ModEntities.ZIPPER = ZIPPER;
+                ModEntities.ZIPPER_DEBRIS = ZIPPER_DEBRIS;
+                ModEntities.ZIPPER_STORAGE = ZIPPER_STORAGE;
+                ModEntities.ZIPPER_POUCH = ZIPPER_POUCH;
                 ModEntities.WHITESNAKE = WHITESNAKE;
                 ModEntities.HALLUCINATORY_ACID_PROJECTILE = HALLUCINATORY_ACID_PROJECTILE;
                 ModEntities.D4C = D4C;

@@ -654,6 +654,13 @@ public class StandIcons {
     public static final ResourceLocation KING_CRIMSON_ITEM_GRAB = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/king_crimson/grab_item.png");
 
+    public static final ResourceLocation STICKY_FINGERS_UNZIP = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zipper_unzip.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIPPER_MASS = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zipper_mass.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIPPER_STORAGE = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zipper_storage.png");
+
     public static final ResourceLocation MANDOM_VISION_ON = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/mandom/vision_on.png");
     public static final ResourceLocation MANDOM_VISION_OFF = new ResourceLocation(Roundabout.MOD_ID,

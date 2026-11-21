@@ -26,7 +26,6 @@ import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
-import net.hydra.jojomod.entity.stand.StickyFingersEntity;
 
 
 public class ForgeEntities {
@@ -897,6 +896,30 @@ public class ForgeEntities {
                             clientTrackingRange(10)
                             .updateInterval(1).
                             build(new ResourceLocation(Roundabout.MOD_ID, "zipper").toString())
+            );
+    public static final RegistryObject<EntityType<ZipperDebrisEntity>> ZIPPER_DEBRIS =
+            ENTITY_TYPES.register("zipper_debris", () ->
+                    EntityType.Builder.<ZipperDebrisEntity>of(ZipperDebrisEntity::new, MobCategory.MISC)
+                            .sized(0.3F, 0.3F).
+                            clientTrackingRange(8)
+                            .updateInterval(1).
+                            build(new ResourceLocation(Roundabout.MOD_ID, "zipper_debris").toString())
+            );
+    public static final RegistryObject<EntityType<ZipperStorageEntity>> ZIPPER_STORAGE =
+            ENTITY_TYPES.register("zipper_storage", () ->
+                    EntityType.Builder.<ZipperStorageEntity>of(ZipperStorageEntity::new, MobCategory.MISC)
+                            .sized(ZipperStorageEntity.SIZE, ZipperStorageEntity.SIZE).
+                            clientTrackingRange(10)
+                            .updateInterval(20).
+                            build(new ResourceLocation(Roundabout.MOD_ID, "zipper_storage").toString())
+            );
+    public static final RegistryObject<EntityType<ZipperPouchEntity>> ZIPPER_POUCH =
+            ENTITY_TYPES.register("zipper_pouch", () ->
+                    EntityType.Builder.<ZipperPouchEntity>of(ZipperPouchEntity::new, MobCategory.MISC)
+                            .sized(0.2F, 0.2F).
+                            clientTrackingRange(8)
+                            .updateInterval(1).
+                            build(new ResourceLocation(Roundabout.MOD_ID, "zipper_pouch").toString())
             );
     public static final RegistryObject<EntityType<FallingBannerEntity>> FALLING_BANNER =
             ENTITY_TYPES.register("falling_banner", () ->

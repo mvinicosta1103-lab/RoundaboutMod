@@ -72,6 +72,10 @@ public class FabricEntityClient {
         EntityRendererRegistry.register(FabricEntities.THE_WORLD_ULTIMATE, TheWorldUltimateRenderer::new);
         EntityRendererRegistry.register(FabricEntities.KING_CRIMSON, KingCrimsonRenderer::new);
         EntityRendererRegistry.register(FabricEntities.STICKY_FINGERS, StickyFingersRenderer::new);
+        EntityRendererRegistry.register(FabricEntities.ZIPPER, ZipperRenderer::new);
+        EntityRendererRegistry.register(FabricEntities.ZIPPER_DEBRIS, ZipperDebrisRenderer::new);
+        EntityRendererRegistry.register(FabricEntities.ZIPPER_STORAGE, ZipperStorageRenderer::new);
+        EntityRendererRegistry.register(FabricEntities.ZIPPER_POUCH, NoopRenderer::new);
         EntityRendererRegistry.register(FabricEntities.WHITESNAKE, WhitesnakeRenderer::new);
         EntityRendererRegistry.register(FabricEntities.HALLUCINATORY_ACID_PROJECTILE, HallucinatoryAcidProjectileRenderer::new);
         EntityRendererRegistry.register(FabricEntities.D4C, D4CRenderer::new);
