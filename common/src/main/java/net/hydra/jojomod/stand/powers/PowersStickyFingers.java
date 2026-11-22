@@ -528,8 +528,8 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void renderIcons(GuiGraphics context, int x, int y) {
-        setSkillIcon(context, x, y, 1, StandIcons.KING_CRIMSON_MINING, PowerIndex.SKILL_1);
-        setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2);
+        setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_1);
+        setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_2);
         setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.SKILL_3);
         setSkillIcon(context, x, y, 4, StandIcons.KING_CRIMSON_FINAL_PUNCH, PowerIndex.SKILL_4);
     }
@@ -542,25 +542,25 @@ public class PowersStickyFingers extends NewPunchingStand {
         int r0 = topPos + 80, r1 = topPos + 99, r2 = topPos + 118;
 
         list.add(drawSingleGUIIcon(context, 18, c0, r0, 0, "ability.roundabout.punch",
-                "instruction.roundabout.press_attack", StandIcons.KING_CRIMSON_PUNCH, 0, level, bypass));
+                "instruction.roundabout.press_attack", StandIcons.STICKY_FINGERS_PUNCH, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c0, r1, 0, "ability.roundabout.guard",
-                "instruction.roundabout.hold_block", StandIcons.KING_CRIMSON_GUARD, 0, level, bypass));
+                "instruction.roundabout.hold_block", StandIcons.STICKY_FINGERS_GUARD, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c0, r2, 0, "ability.roundabout.sticky_kick",
                 "instruction.roundabout.press_attack_crouch", StandIcons.KING_CRIMSON_FINAL_PUNCH, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r0, 0, "ability.roundabout.barrage",
-                "instruction.roundabout.barrage", StandIcons.KING_CRIMSON_BARRAGE, 0, level, bypass));
+                "instruction.roundabout.barrage", StandIcons.STICKY_FINGERS_BARRAGE, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r1, 0, "ability.roundabout.mining",
                 "instruction.roundabout.hold_attack", StandIcons.KING_CRIMSON_MINING, 0, level, bypass));
 
         list.add(drawSingleGUIIcon(context, 18, c2, r0, 0, "ability.roundabout.zipper_unzip",
-                "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_MINING, 1, level, bypass));
+                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_UNZIP, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r1, 0, "ability.roundabout.zipper_mass",
-                "instruction.roundabout.press_skill_crouch", StandIcons.KING_CRIMSON_MINING, 1, level, bypass));
+                "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_MASS, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r2, 0, "ability.roundabout.zipper_storage",
-                "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_ITEM_GRAB, 1, level, bypass));
+                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_ZIPPER_STORAGE, 1, level, bypass));
 
         list.add(drawSingleGUIIcon(context, 18, c3, r0, 0, "ability.roundabout.zipper_fist",
-                "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
+                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r1, 0, "ability.roundabout.zipper_release",
                 "instruction.roundabout.press_skill_crouch", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r2, 0, "ability.roundabout.zipper_disassemble",
@@ -573,7 +573,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c4, r2, 0, "ability.roundabout.zipper_hidden",
                 "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c5, r0, 0, "ability.roundabout.vault_kc",
-                "instruction.roundabout.press_skill_air", StandIcons.KING_CRIMSON_LEDGE_GRAB, 3, level, bypass));
+                "instruction.roundabout.press_skill_air", StandIcons.STICKY_FINGERS_VAULT, 3, level, bypass));
 
         list.add(drawSingleGUIIcon(context, 18, c5, r1, 0, "ability.roundabout.zipper_guillotine",
                 "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_FINAL_PUNCH, 4, level, bypass));
