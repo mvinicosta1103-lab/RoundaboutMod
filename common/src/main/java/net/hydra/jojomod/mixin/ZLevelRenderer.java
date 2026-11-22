@@ -35,6 +35,8 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.animal.allay.Allay;
+import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.material.FogType;
 import net.zetalasis.client.shader.RPostShaderRegistry;
@@ -326,13 +328,20 @@ public abstract class ZLevelRenderer implements ILevelRenderer {
                     } else if (entity instanceof LifeTrackerEntity pre) {
                         ClientUtil.preRenderLifeTracker(pre, cameraX, cameraY, cameraZ, partialTick, stack, buffer);
                     } else if(entity instanceof BlackSabbathEntity bs){
-                        ClientUtil.preRenderFloatSabbath(bs, cameraX, cameraY, cameraZ, partialTick, stack, buffer);
+                        if(!bs.getHunting()) {
+                            ClientUtil.preRenderFloatSabbath(bs, cameraX, cameraY, cameraZ, partialTick, stack, buffer);
+                        }
                     } else if (entity instanceof StandEntity se) {
                         if(se.getBsGrabbed() != 0 || se instanceof GrabbedMobSoul) {
                             Entity e = level.getEntity(se.getBsGrabbed());
                             if(e instanceof BlackSabbathEntity bs) {
-                                ClientUtil.preRenderGrabbedSoul(bs, se, cameraX, cameraY, cameraZ, partialTick, stack, buffer);
+                                ClientUtil.preRenderGrabbedSoul(bs, se,null, cameraX, cameraY, cameraZ, partialTick, stack, buffer);
                             }
+                        }
+                    } else if(entity instanceof Allay || entity instanceof Vex){
+                        Entity e = this.level.getEntity(((StandUser)entity).roundabout$getGrabberSabbath());
+                        if(e instanceof BlackSabbathEntity bs) {
+                            ClientUtil.preRenderGrabbedSoul(bs, null,entity, cameraX, cameraY, cameraZ, partialTick, stack, buffer);
                         }
                     }
                 }

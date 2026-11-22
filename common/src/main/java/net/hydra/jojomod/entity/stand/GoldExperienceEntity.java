@@ -12,7 +12,10 @@ public class GoldExperienceEntity extends FollowingStandEntity {
     }
 
     public static final byte PART_5 = 0,
-            BETA = 1;
+            BETA = 1,
+            DIAMOND = 2,
+            GUARD = 3,
+            PS2 = 4;
 
     public final AnimationState lifePunch = new AnimationState();
     public final AnimationState doublePunch = new AnimationState();
@@ -32,6 +35,7 @@ public class GoldExperienceEntity extends FollowingStandEntity {
     public final AnimationState itemThrowAnimation = new AnimationState();
     public final AnimationState blockRetractAnimation = new AnimationState();
     public final AnimationState itemRetractAnimation = new AnimationState();
+    public final AnimationState thisIsRequiemAnimation = new AnimationState();
 
     //used for animations later
     public static final byte
@@ -40,7 +44,8 @@ public class GoldExperienceEntity extends FollowingStandEntity {
         HEAL_WINDUP = 84,
         HEAL_OTHERS = 85,
         HEAL_SELF = 86,
-        GROUND_PUNCH = 87;
+        GROUND_PUNCH = 87,
+        REQUIEM = 88;
 
     @Override
     public void setupAnimationStates() {
@@ -84,6 +89,12 @@ public class GoldExperienceEntity extends FollowingStandEntity {
             this.groundPunch.startIfStopped(this.tickCount);
         } else {
             this.groundPunch.stop();
+        }
+
+        if (animation == REQUIEM) {
+            this.thisIsRequiemAnimation.startIfStopped(this.tickCount);
+        } else {
+            this.thisIsRequiemAnimation.stop();
         }
 
         if (this.getAnimation() != KICK_BARRAGE) {

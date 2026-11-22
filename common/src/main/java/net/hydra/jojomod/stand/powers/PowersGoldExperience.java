@@ -1,17 +1,23 @@
 package net.hydra.jojomod.stand.powers;
 
 import com.google.common.collect.Lists;
+import net.hydra.jojomod.Roundabout;
 import net.hydra.jojomod.access.IGravityEntity;
+import net.hydra.jojomod.access.IMob;
 import net.hydra.jojomod.access.IPlayerEntity;
 import net.hydra.jojomod.block.*;
 import net.hydra.jojomod.client.ClientNetworking;
 import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.client.StandIcons;
+import net.hydra.jojomod.client.hud.StandHudRender;
 import net.hydra.jojomod.entity.*;
 import net.hydra.jojomod.entity.gold_experience.*;
 import net.hydra.jojomod.entity.projectile.*;
+import net.hydra.jojomod.entity.stand.FollowingStandEntity;
 import net.hydra.jojomod.entity.stand.GoldExperienceEntity;
 import net.hydra.jojomod.entity.stand.StandEntity;
+import net.hydra.jojomod.entity.stand.StarPlatinumEntity;
+import net.hydra.jojomod.entity.visages.JojoNPC;
 import net.hydra.jojomod.event.AbilityIconInstance;
 import net.hydra.jojomod.event.ModEffects;
 import net.hydra.jojomod.event.ModParticles;
@@ -29,6 +35,7 @@ import net.hydra.jojomod.util.C2SPacketUtil;
 import net.hydra.jojomod.util.MainUtil;
 import net.hydra.jojomod.util.S2CPacketUtil;
 import net.hydra.jojomod.util.config.ClientConfig;
+import net.hydra.jojomod.util.config.Config;
 import net.hydra.jojomod.util.config.ConfigManager;
 import net.hydra.jojomod.util.gravity.RotationUtil;
 import net.minecraft.ChatFormatting;
@@ -51,14 +58,24 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.IronGolem;
+import net.minecraft.world.entity.animal.Sheep;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.monster.AbstractSkeleton;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Drowned;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.*;
+import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.context.DirectionalPlaceContext;
 import net.minecraft.world.level.ClipContext;
@@ -90,110 +107,68 @@ public class PowersGoldExperience extends BlockGrabPreset {
             ITEM_THROW = 60,
             TREE = 61,
             LIFE_SENSOR = 63,
-            HEAL_CHARGE = 64;
+            HEAL_CHARGE = 64,
+            REQUIEM = 90;
 
     // move bytes found in other moves
     public static final byte ITEM_IMBUE = 62;
 
-    @Override
-    public boolean canUseStandArrow() { return canUseRequiem(); }
 
-    public boolean canUseRequiem() {
-        return hasGoldenDisc() || canExecuteMoveWithLevel(getMaxLevel());
-    }
-    public boolean isPossibleToRequiem() {
-        return resolvePoints >= getNeededResolvePoints();
-    }
-
-    private float resolvePoints = 0F;
-
-    public float getResolvePoints() { return resolvePoints; }
-    public float getNeededResolvePoints() { return 300.0F; }
-
-    @Override
-    public boolean onStandArrowUse() {
-        if (this.self instanceof Player PE) {
-            if (isPossibleToRequiem()) { /// do epic aura farm animation here or something
-                sendParticlesIfPossible(self.level(),ParticleTypes.FIREWORK, PE.getX(),
-                        PE.getY() + PE.getEyeHeight(), PE.getZ(),
-                        20, 0, 0, 0, 0.4);
-
-                playSoundIfPossible(self.level(),null, this.self.blockPosition(), ModSounds.GE_REQUIEM_ARROW_EVENT, SoundSource.PLAYERS, 0.85F, 1.0f);
-
-                if (!isClient()) {
-                    ((ServerPlayer) this.self).displayClientMessage(Component.translatable("leveling.roundabout.requiem_activated").
-                            withStyle(ChatFormatting.YELLOW), true);
-                }
-
-                return true;
-            }else {
-                if (!isClient()) {
-                    ((ServerPlayer) this.self).displayClientMessage(Component.translatable("leveling.roundabout.requiem_failed").
-                            withStyle(ChatFormatting.RED), true);
-                }
-            }
-        }
-        return false;
-    }
-
-    private float getResolvePointsObtainingCap() { return 30.0F; }
-
-    public boolean onKilledEntity(ServerLevel $$0, LivingEntity victim){
-        if (!(canUseRequiem())) {
-            return super.onKilledEntity($$0, victim);
-        }
-
-        if (resolvePoints < getNeededResolvePoints()) {
-            if (victim instanceof Mob) {
-                float amount = victim.getMaxHealth();
-
-                if (!((StandUser)victim).roundabout$getStandDisc().isEmpty() && (victim instanceof Monster ||
-                        victim instanceof NeutralMob)){
-                    if (victim.getMaxHealth() >= 100){
-                        amount = (int)( amount*0.5);
-                    }
-                    amount = amount * 2.5f;
-                } else {
-                    if (victim.getMaxHealth() >= 100){
-                        amount = (int)( amount*0.5);
-                    }
-                }
-
-                addResolvePoints(amount);
-            }
-        }
-
-        return super.onKilledEntity($$0,victim); // DO NOT RETURN 'true' OR ELSE IT WILL STOP ENTITIES FROM DYIENG
-    }
-
-    public void onPlayerHurt(Player PL, DamageSource src, float damage) {
-        if (!(canUseRequiem())) {
-            return;
-        }
-        addResolvePoints(damage*3.5f);
-    }
-
-    private void addResolvePoints(float amount) {
-        resolvePoints += Math.min(amount, getResolvePointsObtainingCap());
-        if (resolvePoints > getNeededResolvePoints()) {
-            resolvePoints = getNeededResolvePoints();
-        }
-        saveDiscAndSync();
-    }
 
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         tag.putFloat("resolvePoints", resolvePoints);
+        if (standArrow != null && !standArrow.isEmpty()) {
+            CompoundTag tag2 = new CompoundTag();
+            tag.put("StandArrow", standArrow.save(tag2));
+        }else {
+            tag.remove("StandArrow"); // dupe prevention
+        }
 
         super.addAdditionalSaveData(tag);
     }
+    protected boolean giveArrowOnLoad() {
+        return activePower != REQUIEM; // prevent from the requiem transformation giving this arrow back before it is time
+    }
+
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         if (tag.contains("resolvePoints")) {
             resolvePoints = tag.getFloat("resolvePoints");
         }
+        if (tag.contains("StandArrow")) {
+            CompoundTag compoundtag = tag.getCompound("StandArrow");
+            standArrow = ItemStack.of(compoundtag);
+            if (standArrow != null && !standArrow.isEmpty() && giveArrowOnLoad()) {
+                giveStandArrowBack();
+            }
+        }
 
         super.readAdditionalSaveData(tag);
+    }
+
+    protected void giveStandArrowBack() {
+        if (canAddItem(standArrow, ((Player) this.getSelf()).getInventory())) {
+            ((Player) this.getSelf()).addItem(standArrow);
+        } else {
+            ItemEntity $$4 = new ItemEntity(this.getSelf().level(), this.getSelf().getX(),
+                    this.getSelf().getY() + this.getSelf().getEyeHeight(), this.getSelf().getZ(),
+                    standArrow);
+            $$4.setPickUpDelay(40);
+            $$4.setThrower(this.getSelf().getUUID());
+            PowerTypes.copyPlaneOfExisting(self,$$4);
+            this.getSelf().level().addFreshEntity($$4);
+        }
+        standArrow = null;
+    }
+
+    @Override
+    public boolean interceptIncomingHarm(DamageSource source, float amount) {
+        if (activePower == REQUIEM) {
+            return !source.is(DamageTypes.GENERIC_KILL);
+        }
+
+        return super.interceptIncomingHarm(source, amount);
     }
 
     // for cooldowns
@@ -205,34 +180,34 @@ public class PowersGoldExperience extends BlockGrabPreset {
      */
 
     private final int getDNACooldown() {
-        return 300;
+        return geConfig().goldExperienceCooldownDNA;
     };
     private final int getAnimalCreationCooldown() {
-        return 400;
+        return geConfig().goldExperienceCooldownAnimal;
     };
     private final int getHealCooldown() {
-        return 200;
+        return geConfig().goldExperienceCooldownHeal;
     };
     private final int getLifeSensorCooldown() {
-        return 60;
+        return geConfig().goldExperienceCooldownLifeSensor;
     };
     private final int getItemImbueCooldown() {
-        return 600;
+        return geConfig().goldExperienceCooldownItemImbue;
     };
     private final int getLifePunchCooldown() {
-        return 800;
+        return geConfig().goldExperienceCooldownLifePunch;
     };
     private final int getVineCooldown() {
-        return 60;
+        return geConfig().goldExperienceCooldownVine;
     };
     private final int getTreeCooldown() {
-        return 300;
+        return geConfig().goldExperienceCooldownTree;
     };
     private final int getBrambleCooldown() {
-        return 240;
+        return geConfig().goldExperienceCooldownBramble;
     };
     private final int getBushCooldown() {
-        return 320;
+        return geConfig().goldExperienceCooldownBush;
     };
 
     // for damage
@@ -271,17 +246,52 @@ public class PowersGoldExperience extends BlockGrabPreset {
     }
     public float getBrambleDamage(Entity entity){
         if (this.getReducedDamage(entity)){
-            return 2.2F;
+            return 1.5F;
         } else {
-            return 7;
+            return 6;
         }
     }
     public float getThornDamage(Entity entity){
         if (this.getReducedDamage(entity)){
-            return 1.2F;
+            return 0.6F;
         } else {
-            return 5.5F;
+            return 4F;
         }
+    }
+
+    @Override
+    public float multiplyPowerByStandConfigPlayers(float power){
+        return (float) (power*(geConfig().goldExperienceAttackMultOnPlayers *0.01));
+    }
+
+    @Override
+    public float multiplyPowerByStandConfigMobs(float power){
+        return (float) (power*(geConfig().goldExperienceAttackMultOnMobs *0.01));
+    }
+
+    // for levels
+    private final int getLifePunchLevel() {
+        return 2;
+    };
+    private final int getTreeLevel() {
+        return 3;
+    };
+    private final int getHealLevel() {
+        return 4;
+    };
+    private final int getItemImbueLevel() {
+        return 5;
+    };
+    private final int getBushLevel() {
+        return 6;
+    };
+    private final int getBrambleLevel() {
+        return 7;
+    };
+
+    // for configs
+    private Config.GoldExperienceSettings geConfig() {
+        return ClientNetworking.getAppropriateConfig().goldExperienceSettings;
     }
 
     // for healing
@@ -363,20 +373,42 @@ public class PowersGoldExperience extends BlockGrabPreset {
     public static List<Item> getDisguiseOptions() {
         return MainUtil.GOLD_EXPERIENCE_DISGUISE_ITEMS;
     }
+    private record KnifeSpawnData(KnifeEntity knife, int delayTicks) {}
+    private final List<KnifeSpawnData> pendingKnives = new ArrayList<>();
 
     // for life sensor
     public boolean lifeSensorActive = false;
     private int sensedImbueEntityId = -1;
-    private static final double LIFE_SENSOR_NORMAL_RANGE = 15.0;
-    private static final double LIFE_SENSOR_IMBUE_RANGE = 150.0;
+
+    // for sounds
+    private static final byte BARRAGE_NOISE = 20;
+    private static final byte LAST_HIT_NOISE = 21;
 
     // basic stand registry stuff
     public PowersGoldExperience(LivingEntity self) {super(self);}
     @Override
     public StandPowers generateStandPowers(LivingEntity entity) {return new PowersGoldExperience(entity);}
-    //TODO: replace this with the GE enable config
     @Override
-    public boolean isStandEnabled(){return true;}
+    public boolean isStandEnabled(){return geConfig().enableGoldExperience;}
+
+    // configs start
+
+    @Override
+    public float getMiningMultiplier() {
+        return (float) (1F*(geConfig().miningSpeedMultiplierGoldExperience *0.01));
+    }
+
+    @Override
+    public int getMiningLevel() {
+        return geConfig().getMiningTierGoldExperience;
+    }
+
+    @Override
+    public int getMaxGuardPoints(){
+        return geConfig().goldExperienceGuardPoints;
+    }
+
+    // configs end
 
     // stand rejection start
 
@@ -431,13 +463,147 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     // stand rejection end
 
+    // mob ai start
+
+    private int attackCD = 0;
+
+    @Override
+    public void tickMobAI(LivingEntity attackTarget) {
+        if (this.self.level().isClientSide()) return;
+
+        if (this.attackCD > 0) {
+            this.attackCD--;
+        }
+
+        if ((this.getActivePower() == HEAL_CHARGE || this.getActivePower() == HEAL)
+                && this.healOthers
+                && this.healTargetId != -1
+                && this.self.level().getEntity(this.healTargetId) instanceof LivingEntity healTarget
+                && healTarget.isAlive()) {
+            rotateMobHead(healTarget);
+            return;
+        }
+
+        if (this.getActivePower() != PowerIndex.NONE && this.getActivePower() != PowerIndex.ATTACK) {
+            if (attackTarget != null && attackTarget.isAlive()) {
+                rotateMobHead(attackTarget);
+            }
+            return;
+        }
+
+        boolean canHeal = !this.onCooldown(PowerIndex.SKILL_1_SNEAK);
+
+        // selfheal below half
+        if (canHeal && this.self.getHealth() < this.self.getMaxHealth() * 0.5F) {
+            this.healOthers = false;
+            this.healTargetId = -1;
+            ((StandUser) this.getSelf()).roundabout$tryPower(HEAL_CHARGE, true);
+            return;
+        }
+
+        // villagers heal others
+        if (this.self instanceof AbstractVillager villager) {
+            boolean isFleeing = ((IMob) villager).roundabout$getFightOrFlight();
+
+            if (canHeal) {
+                List<LivingEntity> nearbyAllies = this.self.level().getEntitiesOfClass(
+                        LivingEntity.class,
+                        this.self.getBoundingBox().inflate(6.0),
+                        e -> e != this.self
+                                && e.isAlive()
+                                && e.getHealth() < e.getMaxHealth() * 0.75F
+                                && (e instanceof AbstractVillager || e instanceof IronGolem)
+                );
+
+                if (!nearbyAllies.isEmpty()) {
+                    LivingEntity allyToHeal = nearbyAllies.get(0);
+                    this.healOthers = true;
+                    this.healTargetId = allyToHeal.getId();
+                    rotateMobHead(allyToHeal);
+                    ((StandUser) this.getSelf()).roundabout$tryPower(HEAL_CHARGE, true);
+                    return;
+                }
+            }
+        }
+
+        if (attackTarget != null && attackTarget.isAlive() && !this.isDazed(this.getSelf())) {
+            double dist = attackTarget.distanceTo(this.getSelf());
+
+            if (dist <= 9.0) {
+                rotateMobHead(attackTarget);
+            }
+
+            // just make something lol
+            if (this.self instanceof Creeper) {
+                animalType = AnimalTypes.FROG.id;
+            } else if (this.self instanceof AbstractSkeleton) {
+                animalType = AnimalTypes.BAT.id;
+            } else if (this.self instanceof Drowned) {
+                animalType = AnimalTypes.PIRAHNA.id;
+            }
+            // everything else makes one of the good "pvp" mobs
+            else {
+                double rng = Math.random();
+                if (rng < 1.0 / 3.0) {
+                    animalType = AnimalTypes.FROG.id;
+                } else if (rng < 2.0 / 3.0) {
+                    animalType = AnimalTypes.BAT.id;
+                } else {
+                    animalType = AnimalTypes.SNAKE.id;
+                }
+            }
+
+            // close range
+            if (dist <= 4.0 && this.canAttack() && !this.onCooldown(PowerIndex.GENERAL_3) && Math.random() < 0.3 && this.attackCD <= 0) {
+                ((StandUser) this.getSelf()).roundabout$tryPower(LIFE_PUNCH, true);
+                this.attackCD = 100;
+                return;
+            }
+
+            // mid range
+            else if (dist <= 8.0 && !this.onCooldown(PowerIndex.SKILL_4) && Math.random() < 0.25 && this.attackCD <= 0) {
+                ((StandUser) this.getSelf()).roundabout$tryPower(BRAMBLES, true);
+                this.attackCD = 100;
+                return;
+            }
+
+            // util
+            else if (dist <= 9.0 && !this.onCooldown(PowerIndex.SKILL_2) && this.attackCD <= 0) {
+                ((StandUser) this.getSelf()).roundabout$tryIntPower(LIFEFORM_CREATION, true, animalType);
+                this.attackCD = 100;
+                return;
+            }
+
+            // barrage and whatever
+            else {super.tickMobAI(attackTarget);}
+        }
+    }
+
+    // mob ai end
+
     // start of move methods
 
     // tick power start
 
     @Override
     public void tickPower() {
+        if (resolveRenderTicks > 0) {
+            resolveRenderTicks--;
+        }
         if (!this.self.level().isClientSide()) {
+            // 1 second knife animal fire delay
+            if (!this.pendingKnives.isEmpty()) {
+                Level level = this.getSelf().level();
+                Iterator<KnifeSpawnData> it = this.pendingKnives.iterator();
+                while (it.hasNext()) {
+                    KnifeSpawnData data = it.next();
+                    if (data.delayTicks() <= 0) {
+                        level.addFreshEntity(data.knife());
+                        it.remove();
+                    }
+                }
+                this.pendingKnives.replaceAll(d -> new KnifeSpawnData(d.knife(), d.delayTicks() - 1));
+            }
             // bramble bush expanding ring
             if (this.bushWaveOrigin != null && this.self.level() instanceof ServerLevel serverLevel) {
                 this.bushWaveTick++;
@@ -479,10 +645,10 @@ public class PowersGoldExperience extends BlockGrabPreset {
                 } else if (this.self.tickCount % 5 == 0 && this.self instanceof ServerPlayer sp) {
                     int foundId = -1;
                     if (this.activeImbuedItemId != null) {
-                        AABB searchBox = this.self.getBoundingBox().inflate(LIFE_SENSOR_IMBUE_RANGE);
+                        AABB searchBox = this.self.getBoundingBox().inflate(geConfig().lifeSenseImbueRange);
                         for (Entity target : this.self.level().getEntities(this.self, searchBox,
                                 e -> e != this.self && !PowerTypes.isInADifferentExistence(e, this.self))) {
-                            if (target.distanceToSqr(this.self) <= (LIFE_SENSOR_IMBUE_RANGE * LIFE_SENSOR_IMBUE_RANGE)
+                            if (target.distanceToSqr(this.self) <= (geConfig().lifeSenseImbueRange * geConfig().lifeSenseImbueRange)
                                     && isHoldingImbuedItem(target)) {
                                 foundId = target.getId();
                                 break;
@@ -664,6 +830,11 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     @Override
     public boolean setPowerOther(int move, int lastMove) {
+        if (move == REQUIEM) {
+            //inventoryGrab();
+            return setRequiem();
+        }
+
         if (move == LIFE_PUNCH) {
             return startLifePunch();
         }
@@ -727,7 +898,11 @@ public class PowersGoldExperience extends BlockGrabPreset {
         else if (move == HEAL_CHARGE) {
             this.healOthers = (passedInt == 1);
             return false;
+        } else if (move == REQUIEM) {
+            grabInventorySlot = passedInt;
         }
+
+
         return super.tryIntPower(move, forced, passedInt);
     }
 
@@ -735,6 +910,10 @@ public class PowersGoldExperience extends BlockGrabPreset {
     public void updatePowerInt(byte activePower, int data) {
         if (activePower == LIFE_SENSOR) {
             this.sensedImbueEntityId = data;
+            return;
+        }
+        if (activePower == PowerIndex.SPECIAL_CHARGED) {
+            resolveRenderTicks = 50;
             return;
         }
         super.updatePowerInt(activePower, data);
@@ -773,7 +952,20 @@ public class PowersGoldExperience extends BlockGrabPreset {
         if (this.getActivePower() == TREE) {
             updateTree();
         }
+
+        // this is requiem...
+        if (this.getActivePower() == REQUIEM) {
+            updateRequiem();
+        }
         super.updateUniqueMoves();
+    }
+
+    public boolean isAttackInept(byte activeP){
+        if (activeP == REQUIEM) {
+
+            return this.isDazed(this.self) || (((TimeStop)this.getSelf().level()).CanTimeStopEntity(this.getSelf()));
+        }
+        return super.isAttackInept(activeP);
     }
 
     @Override
@@ -806,6 +998,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
     @Override
     public void buttonInputAttack(boolean keyIsDown, Options options) {
         if (!consumeClickInput) {
+            if (activePower == REQUIEM) {return; }
             if (impaleTicks > 0){
                 return;
             }
@@ -850,7 +1043,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
     // lets animations happen while blocking
     @Override
     public boolean buttonInputGuard(boolean keyIsDown, Options options) {
-        if (impaleTicks > 0) {
+        if (impaleTicks > 0 || this.activePower == REQUIEM) {
             return false;
         }
         if (this.activePower == TREE || this.activePower == BUSH_CREATION
@@ -858,14 +1051,6 @@ public class PowersGoldExperience extends BlockGrabPreset {
             return false;
         }
         return super.buttonInputGuard(keyIsDown, options);
-    }
-
-    @Override
-    public byte getSoundCancelingGroupByte(byte soundChoice) {
-        if (soundChoice == SoundIndex.ALT_CHARGE_SOUND_1) {
-            return SoundIndex.BARRAGE_SOUND_GROUP;
-        }
-        return super.getSoundCancelingGroupByte(soundChoice);
     }
 
     // item interactions (lifeform creation) start
@@ -937,6 +1122,8 @@ public class PowersGoldExperience extends BlockGrabPreset {
             return;
         } else if (sourceStack.is(ModItems.KNIFE_BUNDLE)) {
             Vec3 baseBoost = getRevertBoost(level, pos, entity, owner, 0.75);
+            PowersGoldExperience gePowers = ((StandUser) owner).roundabout$getStandPowers() instanceof PowersGoldExperience ge ? ge : null;
+
             for (int i = 0; i < 4; i++) {
                 KnifeEntity knife = new KnifeEntity(level, owner, sourceStack.copy());
                 knife.setPos(pos);
@@ -945,7 +1132,13 @@ public class PowersGoldExperience extends BlockGrabPreset {
                         (level.random.nextDouble() - 0.5) * 0.08,
                         (level.random.nextDouble() - 0.5) * 0.14
                 ));
-                level.addFreshEntity(knife);
+                if (gePowers != null) {
+                    // 1 second delay
+                    gePowers.pendingKnives.add(new KnifeSpawnData(knife, 20));
+                } else {
+                    // fallback
+                    level.addFreshEntity(knife);
+                }
             }
             return;
         } else if (sourceStack.is(ModItems.GASOLINE_CAN)) {
@@ -1606,14 +1799,14 @@ public class PowersGoldExperience extends BlockGrabPreset {
                 double distSq = ent.distanceToSqr(this.self);
 
                 if (ent.getId() == this.sensedImbueEntityId) {
-                    return distSq <= (LIFE_SENSOR_IMBUE_RANGE * LIFE_SENSOR_IMBUE_RANGE);
+                    return distSq <= (geConfig().lifeSenseImbueRange * geConfig().lifeSenseImbueRange);
                 }
 
                 if (ent instanceof LivingEntity living
                         && !(ent instanceof StandEntity)
                         && !(ent instanceof ArmorStand)
                         && living.isAlive()) {
-                    return distSq <= (LIFE_SENSOR_NORMAL_RANGE * LIFE_SENSOR_NORMAL_RANGE);
+                    return distSq <= (geConfig().lifeSenseRange * geConfig().lifeSenseRange);
                 }
             }
         }
@@ -1633,7 +1826,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
     // item imbue start
 
     private void tryOpenItemImbue() {
-        if(!this.onCooldown(PowerIndex.SKILL_4_SNEAK)) {
+        if(!this.onCooldown(PowerIndex.SKILL_4_SNEAK) && canExecuteMoveWithLevel(getItemImbueLevel()) && isHoldingItem()) {
             ClientUtil.openItemImbue();
         }
     }
@@ -1914,7 +2107,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
         BlockHitResult blockHit = this.getRayBlockOutline(this.self, punchRange);
 
         // entity vs block check
-        if ((targetInCrosshair == null || targetInCrosshair instanceof GEThornEntity) && blockHit.getType() == HitResult.Type.BLOCK) {
+        if (this.activePower != PowerIndex.BARRAGE_2 && (targetInCrosshair == null || targetInCrosshair instanceof GEThornEntity) && blockHit.getType() == HitResult.Type.BLOCK) {
             this.isGroundBarraging = true;
 
             if (this.self instanceof Player) {
@@ -1966,11 +2159,18 @@ public class PowersGoldExperience extends BlockGrabPreset {
                     BlockPos groundPos = findGroundPosition(level, BlockPos.containing(targetX, this.self.getY(), targetZ));
 
                     if (groundPos != null) {
-                        GEThornEntity rootEntity = new GEThornEntity(ModEntities.GE_THORN, level);
-                        rootEntity.setOwner(this.getSelf());
-                        rootEntity.setPos(targetX, groundPos.getY() + 1.0, targetZ);
+                        Vec3 spawnPos = new Vec3(targetX, groundPos.getY() + 1.0, targetZ);
+                        boolean tooClose = !level.getEntitiesOfClass(
+                                GEThornEntity.class, new AABB(spawnPos, spawnPos).inflate(0.35D)).isEmpty();
 
-                        level.addFreshEntity(rootEntity);
+                        // z fighting fix. i couldn't find any other way to fix it, so i'm just gonna prevent them from overlapping in the first place.
+                        if (!tooClose) {
+                            GEThornEntity rootEntity = new GEThornEntity(ModEntities.GE_THORN, level);
+                            rootEntity.setOwner(this.getSelf());
+                            rootEntity.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
+
+                            level.addFreshEntity(rootEntity);
+                        }
                     }
                 }
             }
@@ -1982,10 +2182,242 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     // unique root barrage end
 
+    // requiem system start
+
+    @Override
+    public boolean canUseStandArrow() { return canUseRequiem() && ((StandUser)self).roundabout$getActive(); }
+
+    @Override public boolean shouldStandArrowShake() { return isPossibleToRequiem() && canUseRequiem(); }
+
+    public boolean canUseRequiem() {
+        return canExecuteMoveWithLevel(getMaxLevel());
+    }
+    public boolean isPossibleToRequiem() {
+        return resolvePoints >= getNeededResolvePoints() && ((StandUser)self).roundabout$getActive();
+    }
+
+    protected float resolvePoints = 0F;
+
+    public float getResolvePoints() { return resolvePoints; }
+    public float getNeededResolvePoints() { return 300.0F; }
+
+    @Override
+    public boolean onStandArrowUse() {
+        if (this.self instanceof Player PE && activePower == PowerIndex.NONE) {
+            if (isPossibleToRequiem()) {
+                //((StandUser) self).roundabout$summonStand(self.level(), true, true);
+                sendParticlesIfPossible(self.level(),ParticleTypes.FIREWORK, PE.getX(),
+                        PE.getY() + PE.getEyeHeight(), PE.getZ(),
+                        20, 0, 0, 0, 0.4);
+
+                playSoundIfPossible(self.level(),null, this.self.blockPosition(), ModSounds.GE_REQUIEM_ARROW_EVENT, SoundSource.PLAYERS, 1.05F, 1.0f);
+
+                if (!isClient()) {
+                    ((ServerPlayer) this.self).displayClientMessage(Component.translatable("leveling.roundabout.requiem_activated").
+                            withStyle(ChatFormatting.YELLOW), true);
+                }
+
+                return false;
+            }else {
+                if (!isClient()) {
+                    ((ServerPlayer) this.self).displayClientMessage(Component.translatable("leveling.roundabout.requiem_failed").
+                            withStyle(ChatFormatting.RED), true);
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onStandArrowUseClient() {
+        if (this.self instanceof Player && activePower == PowerIndex.NONE) {
+            if (isPossibleToRequiem()) {
+
+                if (!isAppropriateToGrab()) {
+                    putDownClient();
+                }
+
+                StandEntity standEntity = getStandEntity(self);
+
+                if (standEntity != null && standEntity.canAcquireHeldItem) {
+                    if ((this.getActivePower() == PowerIndex.POWER_2 || this.getActivePower() == PowerIndex.POWER_2_SNEAK
+                            || this.getActivePower() == PowerIndex.POWER_2_SNEAK_EXTRA)){
+                        this.addItem(standEntity);
+                        standEntity.setHeldItem(ItemStack.EMPTY);
+                    }
+                }
+
+                ((StandUser) this.getSelf()).roundabout$tryIntPower(REQUIEM, true,
+                        ((Player) this.getSelf()).getInventory().selected);
+                tryIntPowerPacket(REQUIEM,
+                        ((Player) this.getSelf()).getInventory().selected);
+                /*((StandUser) this.getSelf()).roundabout$tryPower(REQUIEM, true);
+                tryPowerPacket(REQUIEM);*/
+
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private float getResolvePointsObtainingCap() { return 30.0F; }
+
+    public boolean onKilledEntity(ServerLevel $$0, LivingEntity victim){
+        if (!(canUseRequiem())) {
+            return super.onKilledEntity($$0, victim);
+        }
+
+        if (resolvePoints < getNeededResolvePoints()) {
+            if (victim instanceof Mob) {
+                float amount = victim.getMaxHealth();
+
+                if (!((StandUser)victim).roundabout$getStandDisc().isEmpty() && (victim instanceof Monster ||
+                        victim instanceof NeutralMob)){
+                    if (victim.getMaxHealth() >= 100){
+                        amount = (int)( amount*0.5);
+                    }
+                    amount = amount * 2.5f;
+                } else {
+                    if (victim.getMaxHealth() >= 100){
+                        amount = (int)( amount*0.5);
+                    }
+                }
+
+                addResolvePoints(amount);
+            }
+        }
+
+        return super.onKilledEntity($$0,victim); // DO NOT RETURN 'true' OR ELSE IT WILL STOP ENTITIES FROM DYIENG
+    }
+
+    public void onPlayerHurt(Player PL, DamageSource src, float damage) {
+        if (!(canUseRequiem())) {
+            return;
+        }
+        addResolvePoints(damage*3.5f);
+    }
+
+    private void addResolvePoints(float amount) {
+        resolvePoints += Math.min(amount, getResolvePointsObtainingCap());
+        if (resolvePoints > getNeededResolvePoints()) {
+            resolvePoints = getNeededResolvePoints();
+        }
+        saveDiscAndSync();
+        if (!isClient() && self instanceof Player PL) {
+            S2CPacketUtil.sendIntPowerDataPacket(PL, PowerIndex.SPECIAL_CHARGED, 0);
+        }
+    }
+
+    // requiem system end
+
+    // requiem animation start
+
+    // to make sure the arrow isn't lost
+    protected ItemStack standArrow = null;
+
+    private boolean setRequiem() {
+        StandEntity stand = getStandEntity(this.self);
+        if (Objects.nonNull(stand) && !stand.isRemoved()) {
+            if (!this.getSelf().level().isClientSide()) {
+                ItemStack stack = ((Player)this.getSelf()).getInventory().getItem(this.grabInventorySlot);
+                if (stack.is(ModItems.STAND_ARROW) || stack.is(ModItems.STAND_BEETLE_ARROW)) {
+                    stand.canAcquireHeldItem = true;
+                    stand.setHeldItem(stack.copyWithCount(1));
+                    stack.shrink(1);
+                    standArrow = null;
+                }else {
+                    return false; // how isn't your main hand a stand arrow?
+                }
+            }
+            this.setAttackTimeDuring(0);
+            this.setActivePower(REQUIEM);
+            //playSoundsIfNearby(IMPALE_NOISE, 27, false);
+            this.animateStand(GoldExperienceEntity.REQUIEM);
+            this.poseStand(OffsetIndex.GUARD_FURTHER_RIGHT);
+            return true;
+        }
+        return false;
+    }
+
+    private void updateRequiem() {
+        if (!isClient() && standArrow == null && attackTimeDuring >= 20) {
+            StandEntity standEntity = ((StandUser)self).roundabout$getStand();
+            if (standEntity != null) {
+                standArrow = standEntity.getHeldItem();
+            }
+        }
+
+        if (attackTimeDuring >= 240) {
+            //setPowerNone();
+
+            ItemStack discy = ((StandUser)self).roundabout$getStandDisc();
+            ItemStack savedDisc = MainUtil.saveToDiscData(self, discy);
+
+            //onStandSwitch();
+
+            ((StandUser)self).roundabout$setStandDisc(new ItemStack(ModItems.CREATIVE_STAND_DISC_GER));
+            ((StandUser)self).roundabout$getStandPowers().onStandSwitchInto();
+            StandEntity GERequiem = null;
+
+            if (((StandUser)self).roundabout$getStandPowers() instanceof PowersGER GER) {
+                GER.idlePos = idlePos;
+                GER.standSkin = standSkin;
+                GER.resolvePoints = resolvePoints;
+
+                GER.setOriginalDisc(savedDisc);
+
+                GERequiem = GER.getNewStandEntity();
+            }
+
+            if (((StandUser)self).roundabout$getStand() != null) {
+                StandEntity oldMe = ((StandUser)self).roundabout$getStand();
+                if (GERequiem != null) {
+                    GERequiem.absMoveTo(oldMe.getX(), oldMe.getY(), oldMe.getZ(), oldMe.getYRot(), oldMe.getXRot());
+
+                    GERequiem.setSkin(((StandUser)self).roundabout$getStandSkin());
+                    GERequiem.setIdleAnimation(((StandUser)self).roundabout$getIdlePos());
+
+                    if (self instanceof Player PE) {
+                        GERequiem.playerSetProperties(PE);
+                        if (GERequiem instanceof FollowingStandEntity FE) {
+                            FE.setDistanceOut(((IPlayerEntity) PE).roundabout$getDistanceOut());
+                            FE.setAnchorPlace(((IPlayerEntity) PE).roundabout$getAnchorPlace());
+                            FE.setAnchorPlaceAttack(((IPlayerEntity) PE).roundabout$getAnchorPlaceAttack());
+                            FE.setSizePercent(((IPlayerEntity) PE).roundabout$getSizePercent());
+                            FE.setIdleRotation(((IPlayerEntity) PE).roundabout$getIdleRotation());
+                            FE.setIdleYOffset(((IPlayerEntity) PE).roundabout$getIdleYOffset());
+                        }
+                        if (!self.level().isClientSide()) {
+                            IPlayerEntity ipe = ((IPlayerEntity) self);
+                            S2CPacketUtil.sendPowerInventorySettings(
+                                    PE, ipe.roundabout$getAnchorPlace(),
+                                    ipe.roundabout$getDistanceOut(),
+                                    ipe.roundabout$getSizePercent(),
+                                    ipe.roundabout$getIdleRotation(),
+                                    ipe.roundabout$getIdleYOffset(),
+                                    ipe.roundabout$getAnchorPlaceAttack());
+                        }
+                    }
+                    oldMe.discard();
+                    self.level().addFreshEntity(GERequiem);
+                    ((StandUser)self).roundabout$standMount(GERequiem);
+                }
+            }else {
+                ((StandUser)self).roundabout$summonStand(self.level(), true, false);
+            }
+
+            ((StandUser)self).roundabout$setStand(GERequiem);
+
+        }
+    }
+
+
+    // requiem animation end
+
     // tree creation start
 
     private void tryGrowTree() {
-        if(!this.onCooldown(PowerIndex.GENERAL_2)) {
+        if(!this.onCooldown(PowerIndex.GENERAL_2) && canExecuteMoveWithLevel(getTreeLevel())) {
             ((StandUser) this.getSelf()).roundabout$tryPower(TREE, true);
             tryPowerPacket(TREE);
         }
@@ -2052,7 +2484,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
                 : centerPos;
         Direction growthDirection = Direction.UP;
 
-        int maxHeight = 7;
+        int maxHeight = geConfig().treeMaxHeight;
         int actualHeight = 0;
 
         for (int y = 0; y < maxHeight; y++) {
@@ -2136,7 +2568,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
                 }
             }
 
-            playSoundIfPossible(level, null, base, ModSounds.GOLD_EXPERIENCE_LIFE_CREATION_EVENT, SoundSource.PLAYERS, 0.9F, 1F);
+            playSoundIfPossible(level, null, base, ModSounds.GOLD_EXPERIENCE_TREE_EVENT, SoundSource.PLAYERS, 0.9F, 1F);
             if (fromSkill) {
                 addEXP(5);
                 this.setCooldown(PowerIndex.GENERAL_2, getTreeCooldown());
@@ -2244,11 +2676,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
             }
             this.animalType = (byte) animalClientConfig;
             tryIntPowerPacket(ITEM_THROW, animalClientConfig);
-
-            // TODO: level lock here
-            //if (canExecuteMoveWithLevel(getItemThrowLevel())) {
             super.itemGrabClient();
-            //}
         }
     }
 
@@ -2413,26 +2841,39 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     private boolean executeLifeformCreation() {
         if (!this.self.level().isClientSide()) {
+            boolean isMob = !(this.self instanceof Player);
 
-            if (this.self.isCrouching()) {
+            if (!isMob && this.self.isCrouching()) {
                 return false;
             }
 
-            if(!isHoldingItem()){
+            if (!isMob && !isHoldingItem()) {
                 return false;
             }
 
             EntityType<?> typeToSpawn = getAnimalEntityType(this.animalType);
+
+            int cooldown = getAnimalCreationCooldown();
+
+            if(animalType == AnimalTypes.SNAKE.id || animalType == AnimalTypes.PIRAHNA.id || animalType == AnimalTypes.BAT.id) {
+                cooldown += 200;
+            }
+            if(animalType == AnimalTypes.FROG.id || animalType == AnimalTypes.BEE.id) {
+                cooldown += 100;
+            }
 
             if (typeToSpawn != null) {
                 Vec3 spawnPos = this.self.position().add(this.self.getLookAngle().scale(1.2));
                 spawnPos = new Vec3(spawnPos.x, spawnPos.y + 1.0, spawnPos.z);
 
                 ItemStack handItem = this.self.getMainHandItem();
+                ItemStack sourceStack = (isMob) ? ItemStack.EMPTY : handItem;
 
-                if (spawnLifeform(typeToSpawn, spawnPos, handItem)) {
-                    setCooldown(PowerIndex.SKILL_2, getAnimalCreationCooldown());
-                    handItem.shrink(1);
+                if (spawnLifeform(typeToSpawn, spawnPos, sourceStack)) {
+                    setCooldown(PowerIndex.SKILL_2, cooldown);
+                    if (!isMob || !handItem.isEmpty()) {
+                        handItem.shrink(1);
+                    }
                     return true;
                 }
             }
@@ -2487,7 +2928,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
     // bramble spikes start
 
     private void tryGrowBramble() {
-        if (!this.onCooldown(PowerIndex.SKILL_4)) {
+        if (!this.onCooldown(PowerIndex.SKILL_4) && canExecuteMoveWithLevel(getBrambleLevel())) {
             ((StandUser) this.getSelf()).roundabout$tryPower(BRAMBLES, true);
             tryPowerPacket(BRAMBLES);
         }
@@ -2521,7 +2962,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
             double startY = this.self.getY();
             double startZ = this.self.getZ();
 
-            int spikeCount = 8;
+            int spikeCount = geConfig().brambleAmount;
             double spacing = 1.3D;
 
             // Clear any old queued spikes before adding new ones
@@ -2583,7 +3024,8 @@ public class PowersGoldExperience extends BlockGrabPreset {
     private void tryHeal() {
         if (!this.onCooldown(PowerIndex.SKILL_1_SNEAK)
                 && this.getActivePower() != HEAL_CHARGE
-                && this.getActivePower() != HEAL) {
+                && this.getActivePower() != HEAL
+                && canExecuteMoveWithLevel(getHealLevel())) {
             this.holdDownHeal = true;
             this.healOthers = true;
             this.tryPower(HEAL_CHARGE, true);
@@ -2653,12 +3095,12 @@ public class PowersGoldExperience extends BlockGrabPreset {
                         ? this.self.level().getEntity(this.healTargetId)
                         : MainUtil.getTargetEntity(this.getSelf(), 5f);
                 if (lockedTarget instanceof LivingEntity livingHeal && livingHeal.isAlive()) {
-                    livingHeal.heal(1f);
+                    livingHeal.heal(geConfig().initialHealBurst);
                     livingHeal.addEffect(new MobEffectInstance(ModEffects.RECONSTRUCTION, 400, 0, false, true, true));
                     playSoundIfPossible(this.self.level(), livingHeal, ModSounds.GOLD_EXPERIENCE_LIFE_CREATION_EVENT, SoundSource.PLAYERS, 1.0F, 1.0F);
                 }
             } else {
-                this.self.heal(1f);
+                this.self.heal(geConfig().initialHealBurst);
                 this.self.addEffect(new MobEffectInstance(ModEffects.RECONSTRUCTION, 400, 0, false, true, true));
                 playSoundIfPossible(this.self.level(), this.self, ModSounds.GOLD_EXPERIENCE_LIFE_CREATION_EVENT, SoundSource.PLAYERS, 1.0F, 1.0F);
             }
@@ -2713,7 +3155,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
         if (createdAny) {
             this.setCooldown(PowerIndex.SKILL_3, getVineCooldown());
             playSoundIfPossible(level, null, this.self.blockPosition(),
-                    ModSounds.GOLD_EXPERIENCE_LIFE_CREATION_EVENT, SoundSource.PLAYERS, 0.85F, 1.0F);
+                    ModSounds.GOLD_EXPERIENCE_VINE_EVENT, SoundSource.PLAYERS, 0.9F, 1.0F);
             addEXP(5);
         }
 
@@ -2757,7 +3199,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
     // bramble bush start
 
     private void tryGrowBush() {
-        if(!this.onCooldown(PowerIndex.GENERAL_4)) {
+        if(!this.onCooldown(PowerIndex.GENERAL_4) && canExecuteMoveWithLevel(getBushLevel())) {
             ((StandUser) this.getSelf()).roundabout$tryPower(BUSH_CREATION, true);
             tryPowerPacket(BUSH_CREATION);
         }
@@ -2791,7 +3233,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
             this.bushWaveOrigin = new Vec3(origin.getX() + 0.5, origin.getY(), origin.getZ() + 0.5);
             this.bushWaveTick = 0;
 
-            int radius = 7;
+            int radius = 4;
             double radiusSq = radius * radius;
             for (BlockPos columnPos : BlockPos.betweenClosed(
                     origin.offset(-radius, 0, -radius),
@@ -2917,7 +3359,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
     // life punch start
 
     private void tryLifePunch() {
-        if (!this.onCooldown(PowerIndex.GENERAL_3)) {
+        if (!this.onCooldown(PowerIndex.GENERAL_3) && canExecuteMoveWithLevel(getLifePunchLevel())) {
             if (this.activePower == LIFE_PUNCH) {
                 ((StandUser) this.getSelf()).roundabout$tryPower(PowerIndex.NONE, true);
                 tryPowerPacket(PowerIndex.NONE);
@@ -3032,6 +3474,11 @@ public class PowersGoldExperience extends BlockGrabPreset {
                 if (!this.self.level().isClientSide()) {
                     playSoundIfPossible(self.level(), null, this.self.blockPosition(), sound, SoundSource.PLAYERS, 0.95F, 1.1F);
                 }
+                if (this.getSelf() instanceof Player serverPlayer && !this.getSelf().level().isClientSide()) {
+                    S2CPacketUtil.sendCooldownSyncPacket((ServerPlayer) serverPlayer, PowerIndex.GENERAL_3, getLifePunchCooldown() + 200);
+                }
+                this.setCooldown(PowerIndex.GENERAL_3, getLifePunchCooldown() + 200);
+                return;
             }
             // all of this is for the block version of life punch
             else {
@@ -3294,6 +3741,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     @Override
     public float inputSpeedModifiers(float basis) {
+        if (this.activePower == REQUIEM) { return 0f; }
         if (this.activePower == PowerIndex.BARRAGE_CHARGE_2) {
             basis*=0.5f;
         } else if (this.activePower == PowerIndex.BARRAGE_2) {
@@ -3309,7 +3757,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     @Override
     public boolean cancelItemUse() {
-        return (this.getActivePower() == PowerIndex.BARRAGE_CHARGE_2 || this.getActivePower() == PowerIndex.BARRAGE_2);
+        return (this.getActivePower() == PowerIndex.BARRAGE_CHARGE_2 || this.getActivePower() == PowerIndex.BARRAGE_2 || this.getActivePower() == REQUIEM);
     }
 
     @Override
@@ -3320,13 +3768,63 @@ public class PowersGoldExperience extends BlockGrabPreset {
     @Override
     public boolean cancelSprintJump(){
         if (this.getActivePower() == PowerIndex.BARRAGE_CHARGE_2 || this.getActivePower() == PowerIndex.BARRAGE_2
-            || this.getActivePower() == HEAL || this.getActivePower() == HEAL_CHARGE) {
+            || this.getActivePower() == HEAL || this.getActivePower() == HEAL_CHARGE || this.getActivePower() == REQUIEM) {
             return true;
         }
         return super.cancelSprintJump();
     }
 
+    @Override
+    public boolean cancelJump(){
+        return getActivePower() == REQUIEM;
+    }
+
+    public boolean cancelSprintParticles(){
+        return getActivePower() == REQUIEM;
+    }
+    /**Cancel all sprinting*/
+    public boolean cancelSprint(){
+        return getActivePower() == REQUIEM;
+    }
+
     // end of move methods
+
+    // levels start
+
+    @Override
+    public byte getMaxLevel() {
+        return 7;
+    }
+
+    @Override
+    public void levelUp() {
+        if (!this.getSelf().level().isClientSide() && this.getSelf() instanceof Player PE) {
+            IPlayerEntity ipe = ((IPlayerEntity) PE);
+            byte level = ipe.roundabout$getStandLevel();
+            if (level == 7) {
+                ((ServerPlayer) this.self).displayClientMessage(Component.translatable("leveling.roundabout.levelup.max.both").
+                        withStyle(ChatFormatting.AQUA), true);
+            } else {
+                ((ServerPlayer) this.self).displayClientMessage(Component.translatable("leveling.roundabout.levelup.both").
+                        withStyle(ChatFormatting.AQUA), true);
+            }
+        }
+        super.levelUp();
+    }
+
+    @Override
+    public int getExpForLevelUp(int currentLevel) {
+        int amt;
+        if (currentLevel == 1) {
+            amt = 100;
+        } else {
+            amt = (100 + ((currentLevel - 1) * 65));
+        }
+        amt = (int) (amt * getLevelMultiplier());
+        return amt;
+    }
+
+    // levels end
 
     // sounds start
 
@@ -3334,11 +3832,23 @@ public class PowersGoldExperience extends BlockGrabPreset {
     protected Byte getSummonSound() {return SoundIndex.SUMMON_SOUND;}
 
     @Override
+    public Byte getLastHitSound(){
+
+        double rand = Math.random();
+        byte skn = ((StandUser)this.getSelf()).roundabout$getStandSkin();
+        return LAST_HIT_NOISE;
+    }
+
+    @Override
     public SoundEvent getSoundFromByte(byte soundChoice) {
         if (soundChoice == SoundIndex.SUMMON_SOUND) {
             return ModSounds.SUMMON_GOLD_EXPERIENCE_EVENT;
         } else if (soundChoice == IMPALE_NOISE || soundChoice == SoundIndex.ALT_CHARGE_SOUND_1) {
             return ModSounds.GOLD_EXPERIENCE_LIFE_PUNCH_WINDUP_EVENT;
+        } else if (soundChoice == BARRAGE_NOISE) {
+            return ModSounds.GOLD_EXPERIENCE_MUDA_RUSH_EVENT;
+        } else if (soundChoice == LAST_HIT_NOISE) {
+            return ModSounds.GOLD_EXPERIENCE_MUDA_EVENT;
         }
         return super.getSoundFromByte(soundChoice);
     }
@@ -3377,6 +3887,13 @@ public class PowersGoldExperience extends BlockGrabPreset {
     }
 
     @Override
+    public byte chooseBarrageSound(){
+        double rand = Math.random();
+        byte skn = ((StandUser)this.getSelf()).roundabout$getStandSkin();
+        return BARRAGE_NOISE;
+    }
+
+    @Override
     public float getPunchLandPitch() {
         return 1F + 0.05F * activePowerPhase;
     }
@@ -3412,6 +3929,16 @@ public class PowersGoldExperience extends BlockGrabPreset {
         return super.tryPower(move, forced);
     }
 
+    @Override
+    public byte getSoundCancelingGroupByte(byte soundChoice) {
+        if (soundChoice == BARRAGE_NOISE) {
+            return SoundIndex.BARRAGE_SOUND_GROUP;
+        } else if (soundChoice == SoundIndex.ALT_CHARGE_SOUND_1) {
+            return SoundIndex.BARRAGE_SOUND_GROUP;
+        }
+        return super.getSoundCancelingGroupByte(soundChoice);
+    }
+
     // sounds end
 
     // skins and entity start
@@ -3421,6 +3948,15 @@ public class PowersGoldExperience extends BlockGrabPreset {
         switch (skinId) {
             case GoldExperienceEntity.BETA -> {
                 return Component.translatable("skins.roundabout.gold_experience.beta");
+            }
+            case GoldExperienceEntity.DIAMOND -> {
+                return Component.translatable("skins.roundabout.gold_experience.diamond");
+            }
+            case GoldExperienceEntity.GUARD -> {
+                return Component.translatable("skins.roundabout.gold_experience.guard");
+            }
+            case GoldExperienceEntity.PS2 -> {
+                return Component.translatable("skins.roundabout.gold_experience.ps2");
             }
             default -> {
                 return Component.translatable("skins.roundabout.gold_experience.base");
@@ -3441,15 +3977,19 @@ public class PowersGoldExperience extends BlockGrabPreset {
             if (Level > 2 || bypass) {
             }
             if (Level > 3 || bypass) {
+                l.add(GoldExperienceEntity.PS2);
             }
             if (Level > 4 || bypass) {
+                l.add(GoldExperienceEntity.DIAMOND);
             }
             if (Level > 5 || bypass) {
+                l.add(GoldExperienceEntity.GUARD);
             }
             if (Level > 6 || bypass) {
                 l.add(GoldExperienceEntity.BETA);
             }
             if (((IPlayerEntity) PE).roundabout$getUnlockedBonusSkin() || bypass) {
+                // deimos GE goes here
             }
         }
 
@@ -3469,7 +4009,7 @@ public class PowersGoldExperience extends BlockGrabPreset {
 
     // stand icons and info screen start
 
-    /**
+    /*
      * Renders the icons for the stand's abilities on the GUI. Comments will specify
      * if icon is for courching, blocking, or normal.
      */
@@ -3479,7 +4019,11 @@ public class PowersGoldExperience extends BlockGrabPreset {
         if (isGuarding()){
             setSkillIcon(context, x, y, 1, StandIcons.GOLD_EXPERIENCE_LIFE_SENSOR, PowerIndex.GENERAL_1);
         } else if (isHoldingSneak()) {
-            setSkillIcon(context, x, y, 1, StandIcons.GOLD_EXPERIENCE_HEAL, PowerIndex.SKILL_1_SNEAK);
+            if (canExecuteMoveWithLevel(getHealLevel())) {
+                setSkillIcon(context, x, y, 1, StandIcons.GOLD_EXPERIENCE_HEAL, PowerIndex.SKILL_1_SNEAK);
+            } else {
+                setSkillIcon(context, x, y, 1, StandIcons.LOCKED, PowerIndex.NO_CD, true);
+            }
         } else if (canDNACreate()) {
             setSkillIcon(context, x, y, 1, StandIcons.GOLD_EXPERIENCE_DNA_CREATION, PowerIndex.GENERAL_EXTRA);
         } else {
@@ -3487,7 +4031,11 @@ public class PowersGoldExperience extends BlockGrabPreset {
         }
         // Ability 2 (X)
         if (isGuarding()){
-            setSkillIcon(context, x, y, 2, StandIcons.GOLD_EXPERIENCE_TREE_GROWTH, PowerIndex.GENERAL_2);
+            if (canExecuteMoveWithLevel(getTreeLevel())) {
+                setSkillIcon(context, x, y, 2, StandIcons.GOLD_EXPERIENCE_TREE_GROWTH, PowerIndex.GENERAL_2);
+            } else {
+                setSkillIcon(context, x, y, 2, StandIcons.LOCKED, PowerIndex.NO_CD, true);
+            }
         } else if (isHoldingSneak()) {
             setSkillIcon(context, x, y, 2, StandIcons.GOLD_EXPERIENCE_ITEM_THROW, PowerIndex.SKILL_2);
         } else {
@@ -3497,7 +4045,11 @@ public class PowersGoldExperience extends BlockGrabPreset {
         if (isGuarding()){
             setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.GLOBAL_DASH);
         } else if (isHoldingSneak()) {
-            setSkillIcon(context, x, y, 3, StandIcons.GOLD_EXPERIENCE_LIFE_PUNCH, PowerIndex.GENERAL_3);
+            if (canExecuteMoveWithLevel(getLifePunchLevel())) {
+                setSkillIcon(context, x, y, 3, StandIcons.GOLD_EXPERIENCE_LIFE_PUNCH, PowerIndex.GENERAL_3);
+            } else {
+                setSkillIcon(context, x, y, 3, StandIcons.LOCKED, PowerIndex.NO_CD, true);
+            }
         } else if (canLatchOntoWall()) {
             setSkillIcon(context, x, y, 3, StandIcons.GOLD_EXPERIENCE_VINE_CLIMB, PowerIndex.SKILL_3);
         } else {
@@ -3505,11 +4057,23 @@ public class PowersGoldExperience extends BlockGrabPreset {
         }
         // Ability 4 (V)
         if (isHoldingSneak()) {
-            setSkillIcon(context, x, y, 4, StandIcons.GOLD_EXPERIENCE_ITEM_IMBUE, PowerIndex.SKILL_4_SNEAK);
+            if (canExecuteMoveWithLevel(getItemImbueLevel())) {
+                setSkillIcon(context, x, y, 4, StandIcons.GOLD_EXPERIENCE_ITEM_IMBUE, PowerIndex.SKILL_4_SNEAK);
+            } else {
+                setSkillIcon(context, x, y, 4, StandIcons.LOCKED, PowerIndex.NO_CD, true);
+            }
         } else if (isGuarding()){
-            setSkillIcon(context, x, y, 4, StandIcons.GOLD_EXPERIENCE_BRAMBLE_TRAP, PowerIndex.GENERAL_4);
+            if (canExecuteMoveWithLevel(getBrambleLevel())) {
+                setSkillIcon(context, x, y, 4, StandIcons.GOLD_EXPERIENCE_BRAMBLE_TRAP, PowerIndex.GENERAL_4);
+            } else {
+                setSkillIcon(context, x, y, 4, StandIcons.LOCKED, PowerIndex.NO_CD, true);
+            }
         } else {
-            setSkillIcon(context, x, y, 4, StandIcons.GOLD_EXPERIENCE_BRAMBLES, PowerIndex.SKILL_4);
+            if (canExecuteMoveWithLevel(getBushLevel())) {
+                setSkillIcon(context, x, y, 4, StandIcons.GOLD_EXPERIENCE_BRAMBLES, PowerIndex.SKILL_4);
+            } else {
+                setSkillIcon(context, x, y, 4, StandIcons.LOCKED, PowerIndex.NO_CD, true);
+            }
         }
     }
 
@@ -3527,45 +4091,46 @@ public class PowersGoldExperience extends BlockGrabPreset {
     }
 
     @Override
-    public List<AbilityIconInstance> drawGUIIcons(GuiGraphics context, float delta, int mouseX, int mouseY, int leftPos,
-                                                  int topPos, byte level, boolean bypas) {
+    public List<AbilityIconInstance> drawGUIIcons(GuiGraphics context, float delta, int mouseX, int mouseY, int leftPos, int topPos, byte level, boolean bypas) {
         List<AbilityIconInstance> $$1 = Lists.newArrayList();
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 20, topPos + 80, 0, "ability.roundabout.gold_experience_lifeform_select",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 20, topPos + 80, 0, "ability.roundabout.punch",
+                "instruction.roundabout.press_attack", StandIcons.GOLD_EXPERIENCE_PUNCH, 4, level, bypas));
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 20, topPos + 99, 0, "ability.roundabout.guard",
+                "instruction.roundabout.hold_block", StandIcons.GOLD_EXPERIENCE_GUARD, 4, level, bypas));
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 20, topPos + 118, 0, "ability.roundabout.gold_experience_double_punch",
+                "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_DOUBLE_PUNCH, 4, level, bypas));
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 39, topPos + 80, 0, "ability.roundabout.barrage",
+                "instruction.roundabout.barrage", StandIcons.GOLD_EXPERIENCE_BARRAGE, 4, level, bypas));
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 39, topPos + 99, 0, "ability.roundabout.kick_barrage",
+                "instruction.roundabout.kick_barrage", StandIcons.GOLD_EXPERIENCE_KICK_BARRAGE, 4, level, bypas));
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 39, topPos + 118, 0, "ability.roundabout.gold_experience_lifeform_select",
                 "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_LIFEFORM_SELECT, 1, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 20, topPos + 99, 0, "ability.roundabout.gold_experience_heal",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 58, topPos + 80, getHealLevel(), "ability.roundabout.gold_experience_heal",
                 "instruction.roundabout.press_skill_crouch", StandIcons.GOLD_EXPERIENCE_HEAL, 1, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 20, topPos + 118, 0, "ability.roundabout.gold_experience_life_sensor",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 58, topPos + 99, 0, "ability.roundabout.gold_experience_life_sensor",
                 "instruction.roundabout.press_skill_block", StandIcons.GOLD_EXPERIENCE_LIFE_SENSOR, 1, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 39, topPos + 80, 0, "ability.roundabout.gold_experience_dna_creation",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 58, topPos + 118, 0, "ability.roundabout.gold_experience_dna_creation",
                 "instruction.roundabout.press_skill_item", StandIcons.GOLD_EXPERIENCE_DNA_CREATION, 1, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 39, topPos + 99, 0, "ability.roundabout.gold_experience_lifeform_creation",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 77, topPos + 80, 0, "ability.roundabout.gold_experience_lifeform_creation",
                 "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_LIFEFORM_CREATION, 2, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 39, topPos + 118, 0, "ability.roundabout.gold_experience_item_throw",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 77, topPos + 99, 0, "ability.roundabout.gold_experience_item_throw",
                 "instruction.roundabout.press_skill_crouch", StandIcons.GOLD_EXPERIENCE_ITEM_THROW, 2, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 58, topPos + 80, 0, "ability.roundabout.gold_experience_tree_growth",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 77, topPos + 118, getTreeLevel(), "ability.roundabout.gold_experience_tree_growth",
                 "instruction.roundabout.press_skill_block", StandIcons.GOLD_EXPERIENCE_TREE_GROWTH, 2, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 58, topPos + 99, 0, "ability.roundabout.dodge",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 96, topPos + 80, 0, "ability.roundabout.dodge",
                 "instruction.roundabout.press_skill", StandIcons.DODGE, 3, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 58, topPos + 118, 0, "ability.roundabout.gold_experience_life_punch",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 96, topPos + 99, getLifePunchLevel(), "ability.roundabout.gold_experience_life_punch",
                 "instruction.roundabout.press_skill_crouch", StandIcons.GOLD_EXPERIENCE_LIFE_PUNCH, 3, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 77, topPos + 80, 0, "ability.roundabout.gold_experience_vine_climb",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 96, topPos + 118, 0, "ability.roundabout.gold_experience_vine_climb",
                 "instruction.roundabout.press_skill_air", StandIcons.GOLD_EXPERIENCE_VINE_CLIMB, 3, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 77, topPos + 99, 0, "ability.roundabout.gold_experience_vine_climb",
-                "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_PLACEHOLDER, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 77, topPos + 118, 0, "ability.roundabout.gold_experience_placeholder",
-                "instruction.roundabout.passive", StandIcons.GOLD_EXPERIENCE_PLACEHOLDER, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 96, topPos + 80, 0, "ability.roundabout.gold_experience_placeholder",
-                "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_PLACEHOLDER, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 96, topPos + 99, 0, "ability.roundabout.gold_experience_placeholder",
-                "instruction.roundabout.passive", StandIcons.GOLD_EXPERIENCE_PLACEHOLDER, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 96, topPos + 118, 0, "ability.roundabout.gold_experience_placeholder",
-                "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_PLACEHOLDER, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 115, topPos + 80, 0, "ability.roundabout.gold_experience_violent_brambles",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 115, topPos + 80, getBrambleLevel(), "ability.roundabout.gold_experience_violent_brambles",
                 "instruction.roundabout.press_skill", StandIcons.GOLD_EXPERIENCE_BRAMBLES, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 115, topPos + 99, 0, "ability.roundabout.gold_experience_item_imbue",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 115, topPos + 99, getItemImbueLevel(), "ability.roundabout.gold_experience_item_imbue",
                 "instruction.roundabout.press_skill_crouch", StandIcons.GOLD_EXPERIENCE_ITEM_IMBUE, 4, level, bypas));
-        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 115, topPos + 118, 0, "ability.roundabout.gold_experience_bramble_trap",
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 115, topPos + 118, getBushLevel(), "ability.roundabout.gold_experience_bramble_trap",
                 "instruction.roundabout.press_skill_block", StandIcons.GOLD_EXPERIENCE_BRAMBLE_TRAP, 4, level, bypas));
+        $$1.add(drawSingleGUIIcon(context, 18, leftPos + 134, topPos + 80, getBrambleLevel(), "ability.roundabout.mining",
+                "instruction.roundabout.hold_attack", StandIcons.GOLD_EXPERIENCE_MINING, 4, level, bypas));
         return $$1;
     }
 
@@ -3589,6 +4154,18 @@ public class PowersGoldExperience extends BlockGrabPreset {
             super.renderAttackHud(context,playerEntity,
                     scaledWidth,scaledHeight,ticks,vehicleHeartCount, flashAlpha, otherFlashAlpha);
         }
+    }
+
+    private int resolveRenderTicks = 0;
+
+    /** hud **/
+    @Override
+    public boolean replaceHudActively() {
+        return resolveRenderTicks > 0;
+    }
+    public void getReplacementHUD(GuiGraphics context, Player cameraPlayer, int screenWidth, int screenHeight, int x,
+                                  boolean removeNum){
+        StandHudRender.renderRequiemBarr(context,cameraPlayer,screenWidth,screenHeight,x, (int)resolvePoints, (int)getNeededResolvePoints());
     }
 
     // stand icons and info screen end
