@@ -16,6 +16,7 @@ public class StickyFingersBaseRenderer<M extends StandEntity> extends StandRende
     private static final ResourceLocation PART_5_SKIN = new ResourceLocation(Roundabout.MOD_ID,"textures/stand/sticky_fingers/part_5.png");
     private static final ResourceLocation MANGA_SKIN = new ResourceLocation(Roundabout.MOD_ID,"textures/stand/sticky_fingers/manga.png");
     private static final ResourceLocation BLACK_AND_WHITE_SKIN = new ResourceLocation(Roundabout.MOD_ID,"textures/stand/sticky_fingers/black_and_white.png");
+    private static final ResourceLocation SO_RETRO_SKIN = new ResourceLocation(Roundabout.MOD_ID,"textures/stand/sticky_fingers/so_retro.png");
 
     public StickyFingersBaseRenderer(EntityRendererProvider.Context context, StandModel root) {
         super(context, root,0f);
@@ -26,6 +27,8 @@ public class StickyFingersBaseRenderer<M extends StandEntity> extends StandRende
             return MANGA_SKIN;
         } else if (BT == StickyFingersEntity.BLACK_AND_WHITE) {
             return BLACK_AND_WHITE_SKIN;
+        } else if (BT == StickyFingersEntity.SO_RETRO_SKIN) {
+            return SO_RETRO_SKIN;
         }
         return PART_5_SKIN;
     }

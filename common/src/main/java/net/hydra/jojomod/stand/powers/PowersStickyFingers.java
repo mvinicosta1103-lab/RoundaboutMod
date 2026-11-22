@@ -111,6 +111,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(StickyFingersEntity.PART_5);
         list.add(StickyFingersEntity.MANGA_SKIN);
         list.add(StickyFingersEntity.BLACK_AND_WHITE);
+        list.add(StickyFingersEntity.SO_RETRO_SKIN);
         return list;
     }
 
@@ -121,6 +122,9 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         if (skinId == StickyFingersEntity.BLACK_AND_WHITE) {
             return Component.translatable("skins.roundabout.sticky_fingers.black_and_white");
+        }
+        if (skinId == StickyFingersEntity.SO_RETRO_SKIN) {
+            return Component.translatable("skins.roundabout.sticky_fingers.so_retro");
         }
         return Component.translatable("skins.roundabout.sticky_fingers.base");
     }
@@ -356,7 +360,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     private static final int GRAPPLE_COOLDOWN = 50;
     private static final int MAX_RELEASE_WINDUP = 24;
     private static final int FIST_PREPARE_ANIM_TICKS = 7;
-    private static final int FIST_IMPACT_ANIM_TICKS = 5;
+    private static final int FIST_IMPACT_ANIM_TICKS = 26;
 
     private StickyFingersFistEntity latchedFist;
     private int grappleTicks;
@@ -501,7 +505,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         fist.setPos(this.self.getX() + look.x * 0.7D,
                 this.self.getEyeY() - 0.25D + look.y * 0.7D,
                 this.self.getZ() + look.z * 0.7D);
-        fist.setDeltaMovement(look.scale(2.35D).add(this.self.getDeltaMovement().scale(0.25D)));
+        fist.setLaunchOrigin(fist.position());
+        fist.setDeltaMovement(look.scale(1.0D).add(this.self.getDeltaMovement().scale(0.25D)));
         fist.setNoGravity(true);
         this.self.level().addFreshEntity(fist);
         this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.PISTON_EXTEND,
@@ -804,7 +809,9 @@ public class PowersStickyFingers extends NewPunchingStand {
                 fistPrimeTicks = 0;
                 launchFist();
             }
-            this.setPowerNone();
+            // Clear the active skill without resetting the impact animation we just started.
+            this.setActivePower(PowerIndex.NONE);
+            this.poseStand(OffsetIndex.FOLLOW);
         } else if (move == ZIPPER_FIST_CANCEL) {
             fistPrimed = false;
             fistPrimeTicks = 0;

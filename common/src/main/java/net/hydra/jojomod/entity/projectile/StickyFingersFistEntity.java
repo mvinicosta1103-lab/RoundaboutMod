@@ -24,6 +24,11 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
     private static final EntityDataAccessor<Boolean> LATCHED = SynchedEntityData.defineId(
             StickyFingersFistEntity.class, EntityDataSerializers.BOOLEAN);
     private int latchedTicks;
+    private Vec3 launchOrigin;
+
+    public void setLaunchOrigin(Vec3 launchOrigin) {
+        this.launchOrigin = launchOrigin;
+    }
 
     public StickyFingersFistEntity(EntityType<? extends StickyFingersFistEntity> type, Level level) {
         super(type, level);
@@ -70,6 +75,12 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
             return;
         }
         super.tick();
+        if (!this.isRemoved()) {
+            if (this.launchOrigin == null) this.launchOrigin = this.position();
+            if (this.position().distanceToSqr(this.launchOrigin) >= 15.0D * 15.0D) {
+                this.discard();
+            }
+        }
     }
 
     @Override

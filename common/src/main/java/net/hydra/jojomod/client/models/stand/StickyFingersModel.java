@@ -6,6 +6,7 @@ import net.hydra.jojomod.client.models.stand.animations.StandAnimations;
 import net.hydra.jojomod.client.models.stand.animations.StarPlatinumAnimations;
 import net.hydra.jojomod.client.models.stand.animations.TheWorldAnimations;
 import net.hydra.jojomod.entity.stand.StickyFingersEntity;
+import net.hydra.jojomod.entity.projectile.StickyFingersFistEntity;
 import net.hydra.jojomod.entity.stand.TheWorldEntity;
 import net.hydra.jojomod.event.powers.StandPowers;
 import net.hydra.jojomod.stand.powers.PowersStickyFingers;
@@ -16,14 +17,23 @@ import net.minecraft.client.model.geom.builders.*;
 
 
 public class StickyFingersModel<T extends StickyFingersEntity> extends StandModel<T> {
+    private static final int ZIPPER_EXTENSION_SEGMENTS = 40;
+    private final ModelPart lowerRightArm;
+    private final ModelPart[] zipperExtension = new ModelPart[ZIPPER_EXTENSION_SEGMENTS];
+
     public StickyFingersModel(ModelPart root) {
         this.stand = root.getChild("stand");
         this.head = stand.getChild("stand2").getChild("head");
         this.body = stand.getChild("stand2").getChild("body");
         this.leftHand = stand.getChild("stand2").getChild("body").getChild("body2")
                 .getChild("torso").getChild("upper_chest").getChild("left_arm").getChild("lower_left_arm");
-        this.rightHand = stand.getChild("stand2").getChild("body").getChild("body2")
-                .getChild("torso").getChild("upper_chest").getChild("right_arm").getChild("lower_right_arm");
+        ModelPart rightArm = stand.getChild("stand2").getChild("body").getChild("body2")
+                .getChild("torso").getChild("upper_chest").getChild("right_arm");
+        this.lowerRightArm = rightArm.getChild("lower_right_arm");
+        for (int i = 0; i < ZIPPER_EXTENSION_SEGMENTS; i++) {
+            this.zipperExtension[i] = this.lowerRightArm.getChild("zipper_extension_" + i);
+        }
+        this.rightHand = this.lowerRightArm;
     }
 
     public static LayerDefinition getTexturedModelData() {
@@ -49,6 +59,46 @@ public class StickyFingersModel<T extends StickyFingersEntity> extends StandMode
         PartDefinition cube_r2 = rzip2.addOrReplaceChild("cube_r2", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offsetAndRotation(0.0F, 6.0F, 0.0F, 0.0F, 3.1416F, 0.0F));
         PartDefinition rzip4 = lower_right_arm.addOrReplaceChild("rzip4", CubeListBuilder.create(), PartPose.offset(0.0F, -0.4F, 0.0F));
         PartDefinition cube_r3 = rzip4.addOrReplaceChild("cube_r3", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offsetAndRotation(0.0F, 6.0F, 0.0F, 0.0F, 3.1416F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_0", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 12.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_1", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 18.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_2", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 24.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_3", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 30.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_4", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 36.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_5", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 42.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_6", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 48.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_7", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 54.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_8", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 60.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_9", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 66.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_10", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 72.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_11", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 78.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_12", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 84.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_13", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 90.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_14", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 96.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_15", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 102.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_16", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 108.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_17", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 114.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_18", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 120.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_19", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 126.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_20", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 132.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_21", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 138.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_22", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 144.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_23", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 150.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_24", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 156.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_25", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 162.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_26", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 168.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_27", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 174.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_28", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 180.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_29", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 186.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_30", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 192.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_31", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 198.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_32", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 204.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_33", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 210.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_34", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 216.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_35", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 222.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_36", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 228.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_37", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 234.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_38", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 240.0F, 0.0F));
+        lower_right_arm.addOrReplaceChild("zipper_extension_39", CubeListBuilder.create().texOffs(64, 40).addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)), PartPose.offset(0.0F, 246.0F, 0.0F));
         PartDefinition left_arm = upper_chest.addOrReplaceChild("left_arm", CubeListBuilder.create(), PartPose.offset(4.0F, -5.25F, 0.0F));
         PartDefinition upper_left_arm = left_arm.addOrReplaceChild("upper_left_arm", CubeListBuilder.create().texOffs(32, 51).addBox(0.0F, -0.75F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(0.01F)).texOffs(56, 0).addBox(0.0F, -0.75F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(0.25F)), PartPose.offset(0.0F, 0.0F, 0.0F));
         PartDefinition lzip1 = upper_left_arm.addOrReplaceChild("lzip1", CubeListBuilder.create().texOffs(64, 40).mirror().addBox(-2.0F, -6.0F, -2.0F, 4.0F, 6.0F, 4.0F, new CubeDeformation(-0.25F)).mirror(false), PartPose.offset(2.0F, 5.1F, 0.0F));
@@ -115,7 +165,7 @@ public class StickyFingersModel<T extends StickyFingersEntity> extends StandMode
         this.animate(pEntity.impale2, StarPlatinumAnimations.Impale2, pAgeInTicks, 1.04f);
         this.animate(pEntity.zipperFistPrepare, StickyFingersAnimations.LONG_PUNCH_PREPARE, pAgeInTicks, 1.0F);
         this.animate(pEntity.zipperFistIdle, StickyFingersAnimations.LONG_PUNCH_IDLE_LOOP, pAgeInTicks, 1.0F);
-        this.animate(pEntity.zipperFistImpact, StickyFingersAnimations.LONG_PUNCH_IMPACT, pAgeInTicks, 1.0F);
+        this.animate(pEntity.zipperFistImpact, StickyFingersAnimations.LONG_PUNCH_IMPACT, pAgeInTicks, 0.4F);
 
         this.animate(pEntity.bloodSplashWindup, KingCrimsonAnimations.Chop_Start, pAgeInTicks, 1.5f);
         this.animate(pEntity.bloodSplashThrow, KingCrimsonAnimations.Chop_Attack, pAgeInTicks, 1.6f);
@@ -127,6 +177,26 @@ public class StickyFingersModel<T extends StickyFingersEntity> extends StandMode
         this.animate(pEntity.itemThrowAnimation, StandAnimations.THROW_ITEM, pAgeInTicks, 1.25f);
         this.animate(pEntity.blockRetractAnimation, StandAnimations.RETRACT_BLOCK, pAgeInTicks, 1.25f);
         this.animate(pEntity.itemRetractAnimation, StandAnimations.RETRACT_ITEM, pAgeInTicks, 1.25f);
+        updateZipperExtension(pEntity, pAgeInTicks);
+    }
+
+    private void updateZipperExtension(T standEntity, float ageInTicks) {
+        float extensionUnits = standEntity.getZipperExtensionLength(
+                net.minecraft.util.Mth.clamp(ageInTicks - standEntity.tickCount, 0.0F, 1.0F)) * 16.0F;
+        for (int i = 0; i < ZIPPER_EXTENSION_SEGMENTS; i++) {
+            ModelPart segment = this.zipperExtension[i];
+            float segmentLength = Math.min(6.0F, extensionUnits - i * 6.0F);
+            if (segmentLength <= 0.0F) {
+                segment.visible = false;
+                segment.yScale = 1.0F;
+                continue;
+            }
+
+            segment.visible = true;
+            segment.yScale = segmentLength / 6.0F;
+            // The partial last section ends exactly at the current extension length.
+            segment.y = 6.0F + i * 6.0F + segmentLength;
+        }
     }
 
     @Override

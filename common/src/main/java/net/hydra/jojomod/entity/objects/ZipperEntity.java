@@ -67,6 +67,7 @@ public class ZipperEntity extends Entity {
     public static final int STATE_OPENING = 7;
 
     private static final int OPEN_ACTION_TUNNEL = 2;
+    private static final int OPEN_ACTION_SWALLOW = 3;
 
     public static final int NEUTRAL_LIFE = 400;
     public static final int HIDE_TICKS = 160;
@@ -78,6 +79,7 @@ public class ZipperEntity extends Entity {
     public static final int TUNNEL_DEPTH_WALL = 5;
     public static final int TUNNEL_DEPTH_FLOOR = 6;
     public static final int MAX_SWALLOWED = 3;
+    private static final float SWALLOWED_EXIT_DAMAGE = 6.0F;
     public static final double ZIPPER_LINK_DISTANCE = 3.0D;
     private static final int MAX_CONNECTED_ZIPPERS = 64;
     private static final int MAX_MERGED_TUNNEL_BLOCKS = 512;
@@ -104,7 +106,14 @@ public class ZipperEntity extends Entity {
     private int mineDelay = 0;
     private int biteTick = -1;
     private int pendingOpenAction = 0;
+    private UUID pendingCapture = null;
+    private boolean retainAfterClose = false;
+    private Vec3 pendingReleaseExit = null;
+    private Direction pendingReleaseFace = Direction.NORTH;
+    private UUID pendingReleaseOwner = null;
+    private int pendingReleaseTicks = 0;
     private final List<UUID> swallowed = new ArrayList<>();
+    private final java.util.Map<UUID, StoredEntityState> swallowedStates = new java.util.HashMap<>();
     private float lastHealth = 0;
     private int lastFood = 0;
     private float lastSaturation = 0;
@@ -625,6 +634,7 @@ public class ZipperEntity extends Entity {
             return;
         }
         for (ZipperEntity zipper : group) {
+            zipper.pendingCapture = null;
             zipper.pendingOpenAction = action;
             zipper.setState(STATE_OPENING);
         }
@@ -836,38 +846,83 @@ public class ZipperEntity extends Entity {
             close();
             return;
         }
-        releaseSwallowed();
+        releaseOwnerSwallowedAtExit(owner);
         setUnzipGroupState(STATE_TUNNEL, 0);
         serverLevel.playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2F, 0.6F);
         serverLevel.playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.5F);
         sparkBurst(this.position().add(0, 1.0D, 0), 24);
     }
 
-    private void swallowNearby() {
-        if (swallowed.size() >= MAX_SWALLOWED) {
+    private Entity findApproachingEntity(Player owner) {
+        BlockPos front = anchor.relative(getFace());
+        AABB opening = new AABB(front).inflate(0.45D);
+        return this.level().getEntitiesOfClass(Entity.class, opening, entity ->
+                        entity.isAlive() && entity != owner && !isOwner(entity)
+                                && !(entity instanceof StandEntity)
+                                && !(entity instanceof ZipperEntity))
+                .stream()
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(null);
+    }
+
+    private void startCaptureOpening(Entity target) {
+        List<ZipperEntity> group = getUnzipGroup();
+        if (group.stream().anyMatch(zipper -> zipper.getState() != STATE_NEUTRAL)) {
             return;
         }
-        Vec3 hide = getHidePos();
-        AABB area = new AABB(hide.x - 1.0D, hide.y - 0.5D, hide.z - 1.0D, hide.x + 1.0D, hide.y + 2.5D, hide.z + 1.0D);
-        for (Mob mob : this.level().getEntitiesOfClass(Mob.class, area)) {
-            if (swallowed.size() >= MAX_SWALLOWED) {
-                return;
-            }
-            if (!mob.isAlive() || isOwner(mob) || mob instanceof StandEntity || swallowed.contains(mob.getUUID())
-                    || MainUtil.isBossMob(mob) || mob.isNoAi() || mob.isInvulnerable()
-                    || mob.getBbWidth() > 1.5F || mob.getBbHeight() > 3.0F) {
-                continue;
-            }
-            swallowed.add(mob.getUUID());
-            mob.setTarget(null);
-            mob.setNoAi(true);
-            mob.setInvulnerable(true);
-            mob.setNoGravity(true);
-            mob.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, NEUTRAL_LIFE + 60, 0, false, false, false));
-            mob.moveTo(hide.x, hide.y, hide.z);
-            mob.setDeltaMovement(Vec3.ZERO);
-            sparkBurst(mob.position().add(0, mob.getBbHeight() / 2, 0), 8);
+        for (ZipperEntity zipper : group) {
+            zipper.pendingCapture = null;
+            zipper.pendingOpenAction = OPEN_ACTION_SWALLOW;
+            zipper.setState(STATE_OPENING);
         }
+        this.pendingCapture = target.getUUID();
+        this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                SoundSource.PLAYERS, 0.9F, 1.35F);
+    }
+
+    private void swallowPendingEntity() {
+        if (!(this.level() instanceof ServerLevel serverLevel) || pendingCapture == null) {
+            return;
+        }
+        Entity target = serverLevel.getEntity(pendingCapture);
+        pendingCapture = null;
+        if (target != null && swallowed.size() < MAX_SWALLOWED && swallowEntity(target)) {
+            retainAfterClose = true;
+            for (ZipperEntity zipper : getUnzipGroup()) {
+                zipper.retainAfterClose = true;
+            }
+            sparkBurst(target.position().add(0, Math.max(0.25D, target.getBbHeight() * 0.5D), 0), 12);
+            serverLevel.playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                    SoundSource.PLAYERS, 1.0F, 0.65F);
+        }
+        close();
+    }
+
+    private boolean swallowEntity(Entity entity) {
+        if (!entity.isAlive() || isOwner(entity) || entity instanceof StandEntity || entity instanceof ZipperEntity
+                || swallowed.size() >= MAX_SWALLOWED || swallowed.contains(entity.getUUID())) {
+            return false;
+        }
+
+        UUID id = entity.getUUID();
+        swallowed.add(id);
+        swallowedStates.put(id, new StoredEntityState(entity.isNoGravity(), entity.isInvisible(),
+                entity.isInvulnerable(), entity instanceof Mob mob && mob.isNoAi()));
+        entity.setNoGravity(true);
+        entity.setInvisible(true);
+        if (entity instanceof LivingEntity living) {
+            living.setInvulnerable(true);
+            if (living instanceof Mob mob) {
+                mob.setTarget(null);
+                mob.setLastHurtByMob(null);
+                mob.setNoAi(true);
+            }
+        }
+        Vec3 hide = getHidePos();
+        entity.moveTo(hide.x, hide.y, hide.z);
+        entity.setDeltaMovement(Vec3.ZERO);
+        entity.hurtMarked = true;
+        return true;
     }
 
     private void holdSwallowed() {
@@ -878,6 +933,12 @@ public class ZipperEntity extends Entity {
         for (UUID id : swallowed) {
             Entity entity = serverLevel.getEntity(id);
             if (entity != null && entity.isAlive()) {
+                entity.setNoGravity(true);
+                entity.setInvisible(true);
+                if (entity instanceof LivingEntity living) {
+                    living.setInvulnerable(true);
+                    if (living instanceof Mob mob) mob.setNoAi(true);
+                }
                 entity.moveTo(hide.x, hide.y, hide.z);
                 entity.setDeltaMovement(Vec3.ZERO);
             }
@@ -885,24 +946,112 @@ public class ZipperEntity extends Entity {
     }
 
     public void releaseSwallowed() {
-        if (swallowed.isEmpty() || !(this.level() instanceof ServerLevel serverLevel)) {
-            swallowed.clear();
-            return;
-        }
-        for (UUID id : swallowed) {
-            Entity entity = serverLevel.getEntity(id);
-            if (entity instanceof LivingEntity living) {
-                living.removeEffect(MobEffects.INVISIBILITY);
-                living.setInvulnerable(false);
-                living.setNoGravity(false);
-                if (living instanceof Mob mob) {
-                    mob.setNoAi(false);
-                }
-                sparkBurst(living.position().add(0, living.getBbHeight() / 2, 0), 8);
+        releaseSwallowedAt(computeReleasePosition(), getOwnerPlayer(), false, getFace());
+    }
+
+    private Vec3 computeReleasePosition() {
+        Direction face = getFace();
+        return computeSurfacePos().add(face.getStepX() * 0.85D,
+                face.getStepY() * 0.85D, face.getStepZ() * 0.85D);
+    }
+
+    private void releaseOwnerSwallowedAtExit(Player owner) {
+        if (!(this.level() instanceof ServerLevel serverLevel)) return;
+        UUID ownerId = getOwnerUUID();
+        if (ownerId == null) return;
+
+        // Release only from a different zipper, after this destination has completed
+        // its opening animation and created the tunnel. Each stored entity is then
+        // emitted separately with a short interval, like a zipper opening in sequence.
+        Vec3 exit = computeReleasePosition();
+        // The destination must be a different zipper and must have completed its opening.
+        // Its age tracks the remaining 60-tick Unzip cooldown from when it was placed.
+        int remainingCooldown = Math.max(0, PowersStickyFingers.UNZIP_COOLDOWN - this.tickCount);
+        for (Entity entity : serverLevel.getAllEntities()) {
+            if (entity instanceof ZipperEntity source && source != this
+                    && ownerId.equals(source.getOwnerUUID()) && !source.swallowed.isEmpty()) {
+                source.beginStaggeredRelease(exit, owner, getFace(), remainingCooldown);
             }
         }
+    }
+
+    private void beginStaggeredRelease(Vec3 exit, Player owner, Direction exitFace, int cooldownTicks) {
+        if (swallowed.isEmpty() || pendingReleaseExit != null) return;
+        this.pendingReleaseExit = exit;
+        this.pendingReleaseFace = exitFace;
+        this.pendingReleaseOwner = owner == null ? null : owner.getUUID();
+        // Wait for the destination's remaining skill cooldown, then emit one entity
+        // every half-second rather than releasing the whole group in one tick.
+        this.pendingReleaseTicks = cooldownTicks;
+    }
+
+    private void tickStaggeredRelease() {
+        if (pendingReleaseExit == null || !(this.level() instanceof ServerLevel serverLevel)) return;
+        if (pendingReleaseTicks > 0) {
+            pendingReleaseTicks--;
+            return;
+        }
+
+        UUID id = swallowed.isEmpty() ? null : swallowed.remove(0);
+        if (id != null) {
+            Player owner = pendingReleaseOwner == null ? null : serverLevel.getPlayerByUUID(pendingReleaseOwner);
+            releaseOneSwallowed(id, pendingReleaseExit, owner, true, pendingReleaseFace);
+            swallowedStates.remove(id);
+            pendingReleaseTicks = 10;
+        }
+        if (swallowed.isEmpty()) {
+            pendingReleaseExit = null;
+            pendingReleaseOwner = null;
+            pendingReleaseTicks = 0;
+        }
+    }
+
+    private void releaseOneSwallowed(UUID id, Vec3 exit, Player owner, boolean damageOnExit, Direction exitFace) {
+        if (!(this.level() instanceof ServerLevel serverLevel)) return;
+        Entity entity = serverLevel.getEntity(id);
+        if (entity == null || !entity.isAlive()) return;
+
+        StoredEntityState flags = swallowedStates.getOrDefault(id, StoredEntityState.DEFAULT);
+        entity.moveTo(exit.x, exit.y, exit.z, entity.getYRot(), entity.getXRot());
+        entity.setNoGravity(flags.noGravity());
+        entity.setInvisible(flags.invisible());
+        if (entity instanceof LivingEntity living) {
+            living.setInvulnerable(false);
+            if (living instanceof Mob mob) mob.setNoAi(flags.noAi());
+            if (damageOnExit) {
+                DamageSource source = owner != null
+                        ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, owner)
+                        : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
+                living.hurt(source, SWALLOWED_EXIT_DAMAGE);
+            }
+            living.setInvulnerable(flags.invulnerable());
+        }
+        Vec3 motion = new Vec3(exitFace.getStepX() * 0.45D,
+                exitFace.getStepY() * 0.45D + 0.2D, exitFace.getStepZ() * 0.45D);
+        entity.setDeltaMovement(motion);
+        entity.hurtMarked = true;
+        sparkBurst(entity.position().add(0, Math.max(0.25D, entity.getBbHeight() * 0.5D), 0), 10);
+        serverLevel.playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR,
+                SoundSource.PLAYERS, 0.9F, 1.3F);
+    }
+
+    private void releaseSwallowedAt(Vec3 exit, Player owner, boolean damageOnExit, Direction exitFace) {
+        if (swallowed.isEmpty()) {
+            swallowedStates.clear();
+            return;
+        }
+        for (UUID id : new ArrayList<>(swallowed)) {
+            releaseOneSwallowed(id, exit, owner, damageOnExit, exitFace);
+        }
         swallowed.clear();
-        serverLevel.playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 0.8F, 1.3F);
+        swallowedStates.clear();
+        pendingReleaseExit = null;
+        pendingReleaseOwner = null;
+        pendingReleaseTicks = 0;
+    }
+
+    private record StoredEntityState(boolean noGravity, boolean invisible, boolean invulnerable, boolean noAi) {
+        private static final StoredEntityState DEFAULT = new StoredEntityState(false, false, false, false);
     }
 
     public void close() {
@@ -911,7 +1060,7 @@ public class ZipperEntity extends Entity {
         }
         boolean changed = false;
         for (ZipperEntity zipper : getUnzipGroup()) {
-            zipper.releaseSwallowed();
+            zipper.pendingCapture = null;
             if (zipper.getState() != STATE_CLOSING) {
                 zipper.pendingOpenAction = 0;
                 zipper.setState(STATE_CLOSING);
@@ -936,12 +1085,23 @@ public class ZipperEntity extends Entity {
     }
 
     protected void serverTick() {
+        holdSwallowed();
+        tickStaggeredRelease();
         switch (getState()) {
             case STATE_NEUTRAL -> {
                 Player owner = getOwnerPlayer();
-                if (owner == null || !owner.isAlive() || stateTicks > NEUTRAL_LIFE) {
+                if (owner == null || !owner.isAlive()) {
+                    if (!swallowed.isEmpty()) releaseSwallowed();
                     close();
                     return;
+                }
+                if (stateTicks > NEUTRAL_LIFE && swallowed.isEmpty()) {
+                    close();
+                    return;
+                }
+                if (swallowed.size() < MAX_SWALLOWED) {
+                    Entity approaching = findApproachingEntity(owner);
+                    if (approaching != null) startCaptureOpening(approaching);
                 }
             }
             case STATE_OPENING -> {
@@ -953,7 +1113,9 @@ public class ZipperEntity extends Entity {
                         close();
                     } else if (action == OPEN_ACTION_TUNNEL) {
                         startTunnel(owner);
-                    } else {
+                    } else if (action == OPEN_ACTION_SWALLOW) {
+                        if (pendingCapture != null) swallowPendingEntity();
+                    } else if (action != 0) {
                         close();
                     }
                 }
@@ -974,7 +1136,12 @@ public class ZipperEntity extends Entity {
             }
             case STATE_CLOSING -> {
                 if (stateTicks >= CLOSE_ANIM_TICKS) {
-                    this.discard();
+                    if (retainAfterClose) {
+                        retainAfterClose = false;
+                        setState(STATE_NEUTRAL);
+                    } else {
+                        this.discard();
+                    }
                 }
             }
         }
@@ -1091,6 +1258,13 @@ public class ZipperEntity extends Entity {
         this.entityData.set(BASE_Y, baseY);
         stateTicks = tag.getInt("stateTicks");
         pendingOpenAction = tag.getInt("pendingOpenAction");
+        pendingCapture = tag.hasUUID("pendingCapture") ? tag.getUUID("pendingCapture") : null;
+        retainAfterClose = tag.getBoolean("retainAfterClose");
+        pendingReleaseExit = tag.contains("releaseX")
+                ? new Vec3(tag.getDouble("releaseX"), tag.getDouble("releaseY"), tag.getDouble("releaseZ")) : null;
+        pendingReleaseFace = Direction.from3DDataValue(tag.getInt("releaseFace"));
+        pendingReleaseOwner = tag.hasUUID("releaseOwner") ? tag.getUUID("releaseOwner") : null;
+        pendingReleaseTicks = tag.getInt("releaseTicks");
         mineDelay = tag.getInt("mineDelay");
         this.entityData.set(MINI, tag.getBoolean("mini"));
         this.entityData.set(FACE, tag.getInt("face"));
@@ -1099,6 +1273,16 @@ public class ZipperEntity extends Entity {
         ListTag list = tag.getList("swallowed", Tag.TAG_INT_ARRAY);
         for (int i = 0; i < list.size(); i++) {
             swallowed.add(NbtUtils.loadUUID(list.get(i)));
+        }
+        swallowedStates.clear();
+        ListTag stateList = tag.getList("swallowedStates", Tag.TAG_COMPOUND);
+        for (int i = 0; i < stateList.size(); i++) {
+            CompoundTag state = stateList.getCompound(i);
+            if (state.hasUUID("id")) {
+                swallowedStates.put(state.getUUID("id"), new StoredEntityState(
+                        state.getBoolean("noGravity"), state.getBoolean("invisible"),
+                        state.getBoolean("invulnerable"), state.getBoolean("noAi")));
+            }
         }
     }
 
@@ -1113,6 +1297,16 @@ public class ZipperEntity extends Entity {
         tag.putInt("baseY", baseY);
         tag.putInt("stateTicks", stateTicks);
         tag.putInt("pendingOpenAction", pendingOpenAction);
+        if (pendingCapture != null) tag.putUUID("pendingCapture", pendingCapture);
+        tag.putBoolean("retainAfterClose", retainAfterClose);
+        if (pendingReleaseExit != null) {
+            tag.putDouble("releaseX", pendingReleaseExit.x);
+            tag.putDouble("releaseY", pendingReleaseExit.y);
+            tag.putDouble("releaseZ", pendingReleaseExit.z);
+        }
+        tag.putInt("releaseFace", pendingReleaseFace.get3DDataValue());
+        if (pendingReleaseOwner != null) tag.putUUID("releaseOwner", pendingReleaseOwner);
+        tag.putInt("releaseTicks", pendingReleaseTicks);
         tag.putInt("mineDelay", mineDelay);
         tag.putBoolean("mini", isMini());
         tag.putInt("face", this.entityData.get(FACE));
@@ -1122,5 +1316,17 @@ public class ZipperEntity extends Entity {
             list.add(NbtUtils.createUUID(id));
         }
         tag.put("swallowed", list);
+        ListTag stateList = new ListTag();
+        for (UUID id : swallowed) {
+            StoredEntityState state = swallowedStates.getOrDefault(id, StoredEntityState.DEFAULT);
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("id", id);
+            entry.putBoolean("noGravity", state.noGravity());
+            entry.putBoolean("invisible", state.invisible());
+            entry.putBoolean("invulnerable", state.invulnerable());
+            entry.putBoolean("noAi", state.noAi());
+            stateList.add(entry);
+        }
+        tag.put("swallowedStates", stateList);
     }
 }

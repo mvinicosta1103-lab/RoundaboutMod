@@ -1,18 +1,56 @@
 package net.hydra.jojomod.entity.stand;
 
+import net.hydra.jojomod.entity.projectile.StickyFingersFistEntity;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.AnimationState;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
 
 public class StickyFingersEntity extends FollowingStandEntity {
+    private float zipperExtensionLength;
+    private float oldZipperExtensionLength;
+
+    public float getZipperExtensionLength(float partialTick) {
+        return Mth.lerp(Mth.clamp(partialTick, 0.0F, 1.0F),
+                this.oldZipperExtensionLength, this.zipperExtensionLength);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        this.oldZipperExtensionLength = this.zipperExtensionLength;
+
+        float targetLength = 0.0F;
+        if (this.level().isClientSide() && this.getUser() != null) {
+            StickyFingersFistEntity fist = this.level().getEntitiesOfClass(
+                    StickyFingersFistEntity.class,
+                    this.getBoundingBox().inflate(16.0D),
+                    entity -> entity.getOwner() == this.getUser() && !entity.isLatched())
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+            if (fist != null) {
+                targetLength = (float) Math.max(0.0D, Math.min(15.0D, this.distanceTo(fist)) - 0.7D);
+            }
+        }
+
+        // Ease toward the moving fist and ease back to zero after a hit or a miss.
+        float easing = targetLength > this.zipperExtensionLength ? 0.72F : 0.35F;
+        this.zipperExtensionLength = Mth.lerp(easing, this.zipperExtensionLength, targetLength);
+        if (Math.abs(this.zipperExtensionLength - targetLength) < 0.02F) {
+            this.zipperExtensionLength = targetLength;
+        }
+    }
+
     public StickyFingersEntity(EntityType<? extends Mob> entityType, Level world) {
         super(entityType, world);
     }
     public static final byte
             PART_5 = 1,
             MANGA_SKIN = 2,
-            BLACK_AND_WHITE = 3;
+            BLACK_AND_WHITE = 3,
+            SO_RETRO_SKIN = 4;
 
 
     public final AnimationState finalPunch = new AnimationState();
