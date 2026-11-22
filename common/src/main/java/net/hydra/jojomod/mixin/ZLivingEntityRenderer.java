@@ -28,11 +28,14 @@ import net.hydra.jojomod.event.powers.StandPowers;
 import net.hydra.jojomod.event.powers.StandUser;
 import net.hydra.jojomod.event.powers.TimeStop;
 import net.hydra.jojomod.item.ModItems;
+import net.hydra.jojomod.mixin.access.models.AccessQuadrupedModel;
+import net.hydra.jojomod.mixin.access.models.AccessModelPart;
 import net.hydra.jojomod.stand.powers.*;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.HierarchicalModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
@@ -63,11 +66,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import javax.annotation.Nullable;
+import java.lang.reflect.Field;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Mixin(LivingEntityRenderer.class)
 public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends EntityModel<T>> extends EntityRenderer<T> implements RenderLayerParent<T, M>, ILivingEntityRenderer {
 
     @Unique private ModelPart[] roundabout$zipperParts;
+    @Unique private String[] roundabout$zipperPartNames;
     @Unique private boolean[] roundabout$zipperPartVisibility;
 
     @Shadow protected abstract boolean addLayer(RenderLayer<T, M> $$0);
@@ -85,27 +95,111 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
                                               MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
         roundabout$restoreZipperParts();
         int mask = PowersStickyFingers.getClientDismembermentMask(entity);
-        if (mask == 0 || !(this.model instanceof HumanoidModel<?> humanoid)) return;
-        this.roundabout$zipperParts = new ModelPart[]{humanoid.head, humanoid.hat, humanoid.rightArm,
-                humanoid.leftArm, humanoid.rightLeg, humanoid.leftLeg};
+        int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
+        if ((mask & legs) == legs) {
+            entity.setPose(Pose.SWIMMING);
+            entity.setSwimming(true);
+        } else if (!entity.isInWater() && entity.getPose() == Pose.SWIMMING && !entity.isFallFlying()) {
+            entity.setSwimming(false);
+            entity.setPose(Pose.STANDING);
+        }
+        if (mask == 0) return;
+        IdentityHashMap<ModelPart, String> affected = new IdentityHashMap<>();
+        List<Map.Entry<String, ModelPart>> roots = roundabout$getModelPartRoots(this.model);
+        for (Map.Entry<String, ModelPart> root : roots) {
+            roundabout$collectDismemberedParts(root.getValue(), root.getKey(), mask, affected);
+        }
+        if (affected.isEmpty()) return;
+        this.roundabout$zipperParts = affected.keySet().toArray(new ModelPart[0]);
+        this.roundabout$zipperPartNames = new String[this.roundabout$zipperParts.length];
         this.roundabout$zipperPartVisibility = new boolean[this.roundabout$zipperParts.length];
         for (int i = 0; i < this.roundabout$zipperParts.length; i++) {
             ModelPart part = this.roundabout$zipperParts[i];
+            this.roundabout$zipperPartNames[i] = affected.get(part);
             this.roundabout$zipperPartVisibility[i] = part.visible;
+            part.visible = false;
         }
-        if ((mask & PowersStickyFingers.ZIPPER_PART_HEAD) != 0) {
-            humanoid.head.visible = false;
-            humanoid.hat.visible = false;
+    }
+
+    /** Collects named body parts from vanilla and modded entity models. */
+    @Unique
+    private static List<Map.Entry<String, ModelPart>> roundabout$getModelPartRoots(EntityModel<?> model) {
+        List<Map.Entry<String, ModelPart>> roots = new ArrayList<>();
+        if (model instanceof HumanoidModel<?> humanoid) {
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("head", humanoid.head));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("hat", humanoid.hat));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("rightArm", humanoid.rightArm));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("leftArm", humanoid.leftArm));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("rightLeg", humanoid.rightLeg));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("leftLeg", humanoid.leftLeg));
+        } else if (model instanceof net.minecraft.client.model.QuadrupedModel<?> quadruped) {
+            AccessQuadrupedModel parts = (AccessQuadrupedModel) quadruped;
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("head", parts.roundabout$getHead()));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("rightFrontLeg", parts.roundabout$getRightFrontLeg()));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("leftFrontLeg", parts.roundabout$getLeftFrontLeg()));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("rightHindLeg", parts.roundabout$getRightHindLeg()));
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("leftHindLeg", parts.roundabout$getLeftHindLeg()));
         }
-        if ((mask & PowersStickyFingers.ZIPPER_PART_RIGHT_ARM) != 0) humanoid.rightArm.visible = false;
-        if ((mask & PowersStickyFingers.ZIPPER_PART_LEFT_ARM) != 0) humanoid.leftArm.visible = false;
-        if ((mask & PowersStickyFingers.ZIPPER_PART_RIGHT_LEG) != 0) humanoid.rightLeg.visible = false;
-        if ((mask & PowersStickyFingers.ZIPPER_PART_LEFT_LEG) != 0) humanoid.leftLeg.visible = false;
+        if (model instanceof HierarchicalModel<?> hierarchical) {
+            roots.add(new AbstractMap.SimpleImmutableEntry<>("root", hierarchical.root()));
+        }
+        for (Class<?> type = model.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                if (!ModelPart.class.isAssignableFrom(field.getType())) continue;
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(model);
+                    if (value instanceof ModelPart part) {
+                        roots.add(new AbstractMap.SimpleImmutableEntry<>(field.getName(), part));
+                    }
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    // Some third-party models restrict reflection; their hierarchical root is still handled.
+                }
+            }
+        }
+        return roots;
+    }
+
+    @Unique
+    private static void roundabout$collectDismemberedParts(ModelPart part, String name, int mask,
+                                                            IdentityHashMap<ModelPart, String> affected) {
+        String normalized = name.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z]", "");
+        if (roundabout$matchesPart(normalized, mask)) affected.putIfAbsent(part, normalized);
+        Map<String, ModelPart> children = ((AccessModelPart) (Object) part).roundabout$getChildren();
+        for (Map.Entry<String, ModelPart> child : children.entrySet()) {
+            roundabout$collectDismemberedParts(child.getValue(), child.getKey(), mask, affected);
+        }
+    }
+
+    @Unique
+    private static boolean roundabout$matchesPart(String name, int mask) {
+        if ((mask & PowersStickyFingers.ZIPPER_PART_HEAD) != 0
+                && (name.equals("head") || name.contains("headwear") || name.equals("hat") || name.equals("skull"))) {
+            return true;
+        }
+        boolean left = name.startsWith("left") || name.contains("left");
+        boolean right = name.startsWith("right") || name.contains("right");
+        if (!left && !right) return false;
+        boolean frontLimb = name.contains("frontleg") || name.contains("foreleg");
+        boolean armLike = name.contains("arm") || name.contains("hand") || frontLimb
+                || name.contains("wings") || name.contains("sleeve");
+        boolean legLike = !frontLimb && (name.contains("leg") || name.contains("hind") || name.contains("foot")
+                || name.contains("feet") || name.contains("paw") || name.contains("pants"));
+        if (armLike && (mask & (left ? PowersStickyFingers.ZIPPER_PART_LEFT_ARM
+                : PowersStickyFingers.ZIPPER_PART_RIGHT_ARM)) != 0) return true;
+        return legLike && (mask & (left ? PowersStickyFingers.ZIPPER_PART_LEFT_LEG
+                : PowersStickyFingers.ZIPPER_PART_RIGHT_LEG)) != 0;
     }
 
     @Inject(method = "render(Lnet/minecraft/world/entity/LivingEntity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("TAIL"))
     private void roundabout$restoreZipperedParts(T entity, float yaw, float partialTicks, PoseStack poseStack,
                                                  MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
+        if (this.roundabout$zipperParts != null) {
+            ZipperDetachedLimbRenderer.capture(entity, this.roundabout$zipperParts, this.roundabout$zipperPartNames,
+                    this.getTextureLocation(entity));
+        } else {
+            ZipperDetachedLimbRenderer.clear(entity.getId());
+        }
         roundabout$restoreZipperParts();
     }
 
@@ -116,6 +210,7 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
             this.roundabout$zipperParts[i].visible = this.roundabout$zipperPartVisibility[i];
         }
         this.roundabout$zipperParts = null;
+        this.roundabout$zipperPartNames = null;
         this.roundabout$zipperPartVisibility = null;
     }
 

@@ -362,6 +362,7 @@
     "access.AccessViewArea",
     "access.MinecraftAccessor",
     "access.models.AccessCreeperModel",
+    "access.models.AccessModelPart",
     "access.models.AccessFoxModel",
     "access.models.AccessHorseModel",
     "access.models.AccessIllagerModel",

@@ -79,7 +79,6 @@ public class ZipperEntity extends Entity {
     public static final int TUNNEL_DEPTH_WALL = 5;
     public static final int TUNNEL_DEPTH_FLOOR = 6;
     public static final int MAX_SWALLOWED = 3;
-    private static final float SWALLOWED_EXIT_DAMAGE = 6.0F;
     public static final double ZIPPER_LINK_DISTANCE = 3.0D;
     private static final int MAX_CONNECTED_ZIPPERS = 64;
     private static final int MAX_MERGED_TUNNEL_BLOCKS = 512;
@@ -886,7 +885,14 @@ public class ZipperEntity extends Entity {
         }
         Entity target = serverLevel.getEntity(pendingCapture);
         pendingCapture = null;
-        if (target != null && swallowed.size() < MAX_SWALLOWED && swallowEntity(target)) {
+        if (target instanceof LivingEntity living && living.isAlive()) {
+            int marks = getOwnerTagLevel(living);
+            DamageSource entryDamage = getOwnerPlayer() != null
+                    ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, getOwnerPlayer())
+                    : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
+            living.hurt(entryDamage, getZipperDamage(marks));
+        }
+        if (target != null && target.isAlive() && swallowed.size() < MAX_SWALLOWED && swallowEntity(target)) {
             retainAfterClose = true;
             for (ZipperEntity zipper : getUnzipGroup()) {
                 zipper.retainAfterClose = true;
@@ -906,8 +912,9 @@ public class ZipperEntity extends Entity {
 
         UUID id = entity.getUUID();
         swallowed.add(id);
+        int tagLevel = entity instanceof LivingEntity living ? getOwnerTagLevel(living) : 0;
         swallowedStates.put(id, new StoredEntityState(entity.isNoGravity(), entity.isInvisible(),
-                entity.isInvulnerable(), entity instanceof Mob mob && mob.isNoAi()));
+                entity.isInvulnerable(), entity instanceof Mob mob && mob.isNoAi(), tagLevel));
         entity.setNoGravity(true);
         entity.setInvisible(true);
         if (entity instanceof LivingEntity living) {
@@ -923,6 +930,19 @@ public class ZipperEntity extends Entity {
         entity.setDeltaMovement(Vec3.ZERO);
         entity.hurtMarked = true;
         return true;
+    }
+
+    private int getOwnerTagLevel(LivingEntity target) {
+        Player owner = getOwnerPlayer();
+        if (owner instanceof StandUser standUser
+                && standUser.roundabout$getStandPowers() instanceof PowersStickyFingers powers) {
+            return powers.getTagLevel(target);
+        }
+        return 0;
+    }
+
+    private float getZipperDamage(int tagLevel) {
+        return 2.0F + Mth.clamp(tagLevel, 0, PowersStickyFingers.TAG_MAX_LEVEL) * 2.0F;
     }
 
     private void holdSwallowed() {
@@ -946,7 +966,7 @@ public class ZipperEntity extends Entity {
     }
 
     public void releaseSwallowed() {
-        releaseSwallowedAt(computeReleasePosition(), getOwnerPlayer(), false, getFace());
+        releaseSwallowedAt(computeReleasePosition(), getOwnerPlayer(), true, getFace());
     }
 
     private Vec3 computeReleasePosition() {
@@ -1022,7 +1042,7 @@ public class ZipperEntity extends Entity {
                 DamageSource source = owner != null
                         ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, owner)
                         : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
-                living.hurt(source, SWALLOWED_EXIT_DAMAGE);
+                living.hurt(source, getZipperDamage(flags.tagLevel()));
             }
             living.setInvulnerable(flags.invulnerable());
         }
@@ -1050,8 +1070,9 @@ public class ZipperEntity extends Entity {
         pendingReleaseTicks = 0;
     }
 
-    private record StoredEntityState(boolean noGravity, boolean invisible, boolean invulnerable, boolean noAi) {
-        private static final StoredEntityState DEFAULT = new StoredEntityState(false, false, false, false);
+    private record StoredEntityState(boolean noGravity, boolean invisible, boolean invulnerable, boolean noAi,
+                                     int tagLevel) {
+        private static final StoredEntityState DEFAULT = new StoredEntityState(false, false, false, false, 0);
     }
 
     public void close() {
@@ -1281,7 +1302,7 @@ public class ZipperEntity extends Entity {
             if (state.hasUUID("id")) {
                 swallowedStates.put(state.getUUID("id"), new StoredEntityState(
                         state.getBoolean("noGravity"), state.getBoolean("invisible"),
-                        state.getBoolean("invulnerable"), state.getBoolean("noAi")));
+                        state.getBoolean("invulnerable"), state.getBoolean("noAi"), state.getInt("tagLevel")));
             }
         }
     }
@@ -1325,6 +1346,7 @@ public class ZipperEntity extends Entity {
             entry.putBoolean("invisible", state.invisible());
             entry.putBoolean("invulnerable", state.invulnerable());
             entry.putBoolean("noAi", state.noAi());
+            entry.putInt("tagLevel", state.tagLevel());
             stateList.add(entry);
         }
         tag.put("swallowedStates", stateList);

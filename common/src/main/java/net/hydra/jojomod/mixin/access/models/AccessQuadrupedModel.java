@@ -11,4 +11,19 @@ public interface AccessQuadrupedModel {
 
     @Accessor("body")
     ModelPart roundabout$getBody();
+
+    @Accessor("head")
+    ModelPart roundabout$getHead();
+
+    @Accessor("rightFrontLeg")
+    ModelPart roundabout$getRightFrontLeg();
+
+    @Accessor("leftFrontLeg")
+    ModelPart roundabout$getLeftFrontLeg();
+
+    @Accessor("rightHindLeg")
+    ModelPart roundabout$getRightHindLeg();
+
+    @Accessor("leftHindLeg")
+    ModelPart roundabout$getLeftHindLeg();
 }

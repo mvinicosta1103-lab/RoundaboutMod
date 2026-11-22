@@ -1438,14 +1438,28 @@
   "config.roundabout.killerQueenAttackMultOnMobs.desc": "Quando de dano o stand causa em Mobs, mesma matematica que o multiplicador para players.",
 
   "ability.roundabout.zipper_toggle": "Alternar Zíper",
-  "ability.roundabout.zipper_toggle.desc": "Use Bloqueio + Habilidade 3 para ativar ou desativar a marcação. Ativa, qualquer ataque do Sticky Fingers adiciona níveis de zíper ao alvo. Os níveis mostram mais ícones acima da cabeça e aplicam mais faixas douradas diretamente sobre a textura do modelo. Desativada, os ataques não marcam os alvos.",
+  "ability.roundabout.zipper_toggle.desc": "Use Bloqueio + Habilidade 3 para ativar ou desativar a marcação. Ataques do Sticky Fingers aplicam até 3 marcas: nível 1 abre os braços, nível 2 também abre as pernas e nível 3 também abre a cabeça. Desativada, os ataques não marcam os alvos.",
+  "ability.roundabout.zipper_fist": "Punho de Zíper",
+  "ability.roundabout.zipper_fist.desc": "Pressione Habilidade 2 para preparar o punho; clique esquerdo para lançá-lo ou direito para cancelar. Com a marcação ativada, acertar um alvo adiciona uma marca. Se o punho prender em um bloco, use Habilidade 3 para ser puxado até ele.",
+  "ability.roundabout.zipper_release": "Unzip Body",
+  "ability.roundabout.zipper_release.desc": "Consome as marcas do alvo e causa dano. Nível 1 abre os dois braços; nível 2 também abre as pernas; nível 3 também abre a cabeça e inicia um golpe final após um breve aviso.",
+  "ability.roundabout.zipper_limb_panel": "Unzip seletivo",
+  "ability.roundabout.zipper_limb_panel.desc": "Escolhe uma parte do corpo da entidade viva na mira para abrir com zíper. Não exige marcas nem causa dano.",
   "ability.roundabout.zipper_unzip": "Zíper",
-  "ability.roundabout.zipper_unzip.desc": "Cria um zíper fechado na parede ou no chão à sua frente. Você pode manter vários zíperes; os que estiverem a até 3 blocos, na mesma superfície e orientação, se unem em um zíper maior. Clique com o botão esquerdo ou direito para abrir uma passagem temporária, que restaura os blocos originais ao fechar. Agache e clique com o botão direito para liberar criaturas guardadas.",
+  "ability.roundabout.zipper_unzip.desc": "Mire em uma entidade e use a habilidade para causar dano e abrir partes do corpo conforme as marcas: braços no nível 1, pernas no nível 2 e cabeça no nível 3. Mire em um bloco para criar um zíper fechado. Zíperes próximos na mesma superfície e orientação se conectam; abra um zíper diferente para liberar criaturas guardadas.",
   "ability.roundabout.zipper_storage": "Armazenamento no Zíper",
   "ability.roundabout.zipper_storage.desc": "Apenas quem estiver usando o Sticky Fingers pode ver e abrir o armazenamento pessoal. Zíperes de storage próximos, na mesma superfície e orientação, se conectam: cada um aumenta o storage em uma linha de 9 espaços, até 54. Em um mob marcado, guarda nele o item que você está segurando por um tempo.",
   "roundabout.zipper_marks_on": "Marcação de zíper ativada",
   "roundabout.zipper_marks_off": "Marcação de zíper desativada",
 
   "roundabout.warden_ts_movement": "Aquilo Não parou ?!",
-  "roundabout.warning.fabulous_graphics.v2": "§eNote: Alguns shaders não funcionam com o fabuloso ativado nos graficos.§r"
+  "roundabout.warning.fabulous_graphics.v2": "§eNote: Alguns shaders não funcionam com o fabuloso ativado nos graficos.§r",
+  "gui.roundabout.sticky_fingers_unzip.title": "STICKY FINGERS — UNZIP",
+  "gui.roundabout.sticky_fingers_unzip.subtitle": "SELECIONE UMA PARTE DO CORPO",
+  "gui.roundabout.sticky_fingers_unzip.hint": "Mire em um alvo vivo • A seleção não causa dano",
+  "gui.roundabout.sticky_fingers_unzip.head": "CABEÇA",
+  "gui.roundabout.sticky_fingers_unzip.left_arm": "BRAÇO ESQUERDO",
+  "gui.roundabout.sticky_fingers_unzip.right_arm": "BRAÇO DIREITO",
+  "gui.roundabout.sticky_fingers_unzip.left_leg": "PERNA ESQUERDA",
+  "gui.roundabout.sticky_fingers_unzip.right_leg": "PERNA DIREITA"
 }

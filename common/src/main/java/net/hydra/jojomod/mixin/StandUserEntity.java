@@ -66,6 +66,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
@@ -108,7 +109,7 @@ import static net.hydra.jojomod.util.MainUtil.isBossMob;
 import static net.hydra.jojomod.util.MainUtil.sendParticlesIfPossible;
 
 @Mixin(value = LivingEntity.class, priority = 103)
-public abstract class StandUserEntity extends Entity implements StandUser {
+public abstract class StandUserEntity extends Entity implements StandUser, IStickyFingersDismemberment {
     @Shadow
     public abstract ItemStack getItemInHand(InteractionHand $$0);
 
@@ -363,6 +364,13 @@ public abstract class StandUserEntity extends Entity implements StandUser {
     @Unique
     private static final EntityDataAccessor<Integer> ROUNDABOUT$HEAT = SynchedEntityData.defineId(LivingEntity.class,
             EntityDataSerializers.INT);
+
+    @Unique
+    private static final EntityDataAccessor<Integer> ROUNDABOUT$STICKY_DISMEMBERMENT =
+            SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.INT);
+    @Unique
+    private static final UUID ROUNDABOUT$STICKY_CRAWL_SPEED =
+            UUID.fromString("6a14ab78-e61c-4d06-906e-cf09a54ec672");
 
     @Unique
     private StandPowers roundabout$Powers;
@@ -2677,7 +2685,9 @@ public abstract class StandUserEntity extends Entity implements StandUser {
 
     @ModifyVariable(method = "addAdditionalSaveData(Lnet/minecraft/nbt/CompoundTag;)V", at = @At(value = "HEAD"), ordinal = 0, argsOnly = true)
     public CompoundTag roundabout$addAdditionalSaveData(CompoundTag $$0) {
-        return MainUtil.saveLivingData($$0,this,(LivingEntity)(Object) this);
+        CompoundTag saved = MainUtil.saveLivingData($$0,this,(LivingEntity)(Object) this);
+        saved.putInt("RoundaboutStickyDismemberment", roundabout$getStickyFingersDismemberment());
+        return saved;
     }
 
     @Inject(method = "readAdditionalSaveData(Lnet/minecraft/nbt/CompoundTag;)V", at = @At(value = "HEAD"))
@@ -2685,9 +2695,100 @@ public abstract class StandUserEntity extends Entity implements StandUser {
         roundabout$loadingStandData = true;
         try {
             MainUtil.loadLivingData($$0,this,(LivingEntity)(Object) this);
+            roundabout$setStickyFingersDismemberment($$0.getInt("RoundaboutStickyDismemberment"));
         } finally {
             roundabout$loadingStandData = false;
         }
+    }
+
+    @Override
+    public int roundabout$getStickyFingersDismemberment() {
+        return ((LivingEntity) (Object) this).getEntityData().get(ROUNDABOUT$STICKY_DISMEMBERMENT);
+    }
+
+    @Override
+    public void roundabout$setStickyFingersDismemberment(int mask) {
+        ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$STICKY_DISMEMBERMENT, mask & 31);
+    }
+
+    @ModifyVariable(method = "travel(Lnet/minecraft/world/phys/Vec3;)V", at = @At("HEAD"), argsOnly = true)
+    private Vec3 roundabout$stickyFingersCrawlMovement(Vec3 movement) {
+        LivingEntity entity = (LivingEntity) (Object) this;
+        int mask = roundabout$getStickyFingersDismemberment();
+        int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
+        int arms = PowersStickyFingers.ZIPPER_PART_LEFT_ARM | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM;
+        if ((mask & legs) != legs) {
+            if (!entity.isInWater() && entity.getPose() == Pose.SWIMMING && !entity.isFallFlying()
+                    && !entity.isPassenger()) {
+                entity.setSwimming(false);
+                entity.setPose(Pose.STANDING);
+            }
+            return movement;
+        }
+
+        entity.setPose(Pose.SWIMMING);
+        entity.setSwimming(true);
+        if ((mask & arms) == arms) {
+            Vec3 velocity = entity.getDeltaMovement();
+            entity.setDeltaMovement(0.0D, velocity.y, 0.0D);
+            return new Vec3(0.0D, movement.y, 0.0D);
+        }
+        return movement;
+    }
+
+    @Inject(method = "tick()V", at = @At("TAIL"))
+    private void roundabout$enforceStickyFingersDismemberment(CallbackInfo ci) {
+        LivingEntity entity = (LivingEntity) (Object) this;
+        int mask = roundabout$getStickyFingersDismemberment();
+        int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
+        int arms = PowersStickyFingers.ZIPPER_PART_LEFT_ARM | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM;
+        boolean legless = (mask & legs) == legs;
+        boolean armless = (mask & arms) == arms;
+
+        if (legless) {
+            entity.setPose(Pose.SWIMMING);
+            entity.setSwimming(true);
+        } else if (!entity.isInWater() && entity.getPose() == Pose.SWIMMING && !entity.isFallFlying()) {
+            entity.setSwimming(false);
+            entity.setPose(Pose.STANDING);
+        }
+
+        AttributeInstance movementSpeed = entity.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (!entity.level().isClientSide() && movementSpeed != null) {
+            double modifierAmount = legless ? (armless ? -1.0D : -0.65D) : 0.0D;
+            AttributeModifier existing = movementSpeed.getModifier(ROUNDABOUT$STICKY_CRAWL_SPEED);
+            if (modifierAmount == 0.0D) {
+                if (existing != null) movementSpeed.removeModifier(ROUNDABOUT$STICKY_CRAWL_SPEED);
+            } else if (existing == null || existing.getAmount() != modifierAmount) {
+                movementSpeed.removeModifier(ROUNDABOUT$STICKY_CRAWL_SPEED);
+                movementSpeed.addTransientModifier(new AttributeModifier(ROUNDABOUT$STICKY_CRAWL_SPEED,
+                        "Sticky Fingers dismemberment movement", modifierAmount,
+                        AttributeModifier.Operation.MULTIPLY_TOTAL));
+            }
+        }
+
+        if (legless && armless) {
+            Vec3 velocity = entity.getDeltaMovement();
+            entity.setDeltaMovement(0.0D, velocity.y, 0.0D);
+        }
+    }
+
+    @Inject(method = "travel(Lnet/minecraft/world/phys/Vec3;)V", at = @At("TAIL"))
+    private void roundabout$stopCrawlingMovement(Vec3 movement, CallbackInfo ci) {
+        int mask = roundabout$getStickyFingersDismemberment();
+        int allLimbs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG
+                | PowersStickyFingers.ZIPPER_PART_LEFT_ARM | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM;
+        if ((mask & allLimbs) == allLimbs) {
+            Vec3 velocity = this.getDeltaMovement();
+            this.setDeltaMovement(0.0D, velocity.y, 0.0D);
+        }
+    }
+
+    @Inject(method = "jumpFromGround()V", at = @At("HEAD"), cancellable = true, require = 0)
+    private void roundabout$preventJumpWithoutLegs(CallbackInfo ci) {
+        int mask = roundabout$getStickyFingersDismemberment();
+        int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
+        if ((mask & legs) == legs) ci.cancel();
     }
 
     @ModifyVariable(method = "checkAutoSpinAttack(Lnet/minecraft/world/phys/AABB;Lnet/minecraft/world/phys/AABB;)V", at = @At("STORE"), ordinal = 0)
@@ -4014,6 +4115,7 @@ public abstract class StandUserEntity extends Entity implements StandUser {
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GRABBED_SOUL, false);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GRABBER_ID, 0);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GE_TREE_ROOT, false);
+            ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$STICKY_DISMEMBERMENT, 0);
         }
     }
 

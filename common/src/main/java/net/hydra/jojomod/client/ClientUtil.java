@@ -1877,6 +1877,9 @@ public class ClientUtil {
     public static void openPlunderScreen(){
         Minecraft.getInstance().setScreen(new PlunderScreen());
     }
+    public static void openStickyFingersUnzipScreen(){
+        Minecraft.getInstance().setScreen(new StickyFingersUnzipScreen());
+    }
     public static void openPowerSwitchScreen(){
         Minecraft.getInstance().setScreen(new PowerSwitcherScreen());
     }

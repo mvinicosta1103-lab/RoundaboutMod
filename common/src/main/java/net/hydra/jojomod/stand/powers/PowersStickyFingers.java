@@ -2,6 +2,8 @@ package net.hydra.jojomod.stand.powers;
 
 import com.google.common.collect.Lists;
 import net.hydra.jojomod.client.StandIcons;
+import net.hydra.jojomod.client.ClientUtil;
+import net.hydra.jojomod.access.IStickyFingersDismemberment;
 import net.hydra.jojomod.entity.ModEntities;
 import net.hydra.jojomod.entity.objects.ZipperEntity;
 import net.hydra.jojomod.entity.objects.ZipperStorageEntity;
@@ -15,6 +17,7 @@ import net.hydra.jojomod.event.index.PowerIndex;
 import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.index.SoundIndex;
 import net.hydra.jojomod.event.powers.StandPowers;
+import net.hydra.jojomod.event.powers.ModDamageTypes;
 import net.hydra.jojomod.sound.ModSounds;
 import net.hydra.jojomod.stand.powers.elements.PowerContext;
 import net.hydra.jojomod.stand.powers.presets.NewPunchingStand;
@@ -46,6 +49,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -160,6 +164,7 @@ public class PowersStickyFingers extends NewPunchingStand {
                 guillotineClient();
             }
             case SKILL_4_CROUCH -> {
+                if (this.self.level().isClientSide()) ClientUtil.openStickyFingersUnzipScreen();
             }
             case SKILL_4_GUARD, SKILL_4_CROUCH_GUARD -> {
             }
@@ -185,10 +190,20 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private void startUnzip() {
         HitResult hit = this.self.pick(UNZIP_RANGE, 1.0F, false);
-        if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
+        Level level = this.self.level();
+        EntityHitResult entityHit = MainUtil.rayCastEntityHitResult(this.self, (float) UNZIP_RANGE);
+        boolean entityIsInFrontOfBlock = entityHit != null
+                && (!(hit instanceof BlockHitResult blockHit)
+                || entityHit.getLocation().distanceToSqr(this.self.getEyePosition())
+                <= blockHit.getLocation().distanceToSqr(this.self.getEyePosition()));
+        if (entityIsInFrontOfBlock && entityHit.getEntity() instanceof LivingEntity target
+                && target != this.self && !(target instanceof StandEntity)) {
+            this.setCooldown(PowerIndex.SKILL_1, UNZIP_COOLDOWN);
+            if (!this.self.level().isClientSide()) unzipTarget(target);
             return;
         }
-        Level level = this.self.level();
+
+        if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) return;
         BlockPos anchor = blockHit.getBlockPos();
         Direction face = blockHit.getDirection();
         BlockPos front = anchor.relative(face);
@@ -217,6 +232,24 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
+    private void unzipTarget(LivingEntity target) {
+        if (!target.isAlive() || target instanceof StandEntity) return;
+        addTag(target);
+        int level = Math.max(1, getTagLevel(target));
+        float damage = 2.0F + level * 2.0F;
+        if (target.hurt(ModDamageTypes.of(target.level(), ModDamageTypes.STAND, this.self), damage)) {
+            applyDismembermentForLevel(target, level);
+            target.knockback(0.25D, this.self.getX() - target.getX(), this.self.getZ() - target.getZ());
+        }
+        if (this.self.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
+                    target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                    12 + level * 4, 0.35D, 0.45D, 0.35D, 0.03D);
+        }
+        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
+                SoundSource.PLAYERS, 1.0F, 0.75F + level * 0.08F);
+    }
+
     private void message(String key) {
         if (this.self instanceof Player player) {
             player.displayClientMessage(Component.translatable(key), true);
@@ -224,13 +257,14 @@ public class PowersStickyFingers extends NewPunchingStand {
     }
 
     public static final int TAG_DURATION = 600;
-    public static final int TAG_MAX_LEVEL = 10;
+    public static final int TAG_MAX_LEVEL = 3;
 
     public static final int ZIPPER_PART_HEAD = 1;
     public static final int ZIPPER_PART_LEFT_ARM = 2;
     public static final int ZIPPER_PART_RIGHT_ARM = 4;
     public static final int ZIPPER_PART_LEFT_LEG = 8;
     public static final int ZIPPER_PART_RIGHT_LEG = 16;
+    public static final byte ZIPPER_UNZIP_PART = PowerIndex.POWER_4_SNEAK;
     private static final int ZIPPER_PART_DURATION = 100;
 
     private record ClientTagState(Level level, int zipperLevel, long expiresAt) {}
@@ -281,6 +315,9 @@ public class PowersStickyFingers extends NewPunchingStand {
     }
 
     public static int getClientDismembermentMask(Entity entity) {
+        if (entity instanceof IStickyFingersDismemberment dismemberment) {
+            return dismemberment.roundabout$getStickyFingersDismemberment();
+        }
         ClientDismembermentState state = CLIENT_DISMEMBERMENT.get(entity.getId());
         if (state == null) return 0;
         if (state.level() != entity.level() || state.expiresAt() <= entity.level().getGameTime()) {
@@ -297,15 +334,46 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
     }
 
-    private void showDismemberedPart(LivingEntity target, int part) {
-        if (!(this.self.level() instanceof ServerLevel serverLevel)) return;
-        int packed = (ZIPPER_PART_DURATION << 8) | part;
-        for (ServerPlayer viewer : serverLevel.players()) {
-            if (viewer.distanceToSqr(target) <= 64.0D * 64.0D) {
-                S2CPacketUtil.sendGenericIntIntToClientPacket(viewer, PacketDataIndex.S2C_ZIPPER_DISMEMBERMENT,
-                        target.getId(), packed);
-            }
+    private void applyDismembermentForLevel(LivingEntity target, int level) {
+        if (!target.isAlive()) return;
+        showDismemberedPart(target, ZIPPER_PART_LEFT_ARM | ZIPPER_PART_RIGHT_ARM);
+        if (level >= 2) {
+            showDismemberedPart(target, ZIPPER_PART_LEFT_LEG | ZIPPER_PART_RIGHT_LEG);
         }
+        if (level >= 3) {
+            showDismemberedPart(target, ZIPPER_PART_HEAD);
+        }
+    }
+
+    private void showDismemberedPart(LivingEntity target, int part) {
+        if (!(this.self.level() instanceof ServerLevel)
+                || !(target instanceof IStickyFingersDismemberment dismemberment)) return;
+        dismemberment.roundabout$setStickyFingersDismemberment(
+                dismemberment.roundabout$getStickyFingersDismemberment() | part);
+    }
+
+    @Override
+    public boolean tryIntPower(int move, boolean forced, int partMask) {
+        if (move == ZIPPER_UNZIP_PART) {
+            if (!this.self.level().isClientSide() && this.self instanceof Player) {
+                int validParts = ZIPPER_PART_HEAD | ZIPPER_PART_LEFT_ARM | ZIPPER_PART_RIGHT_ARM
+                        | ZIPPER_PART_LEFT_LEG | ZIPPER_PART_RIGHT_LEG;
+                if (Integer.bitCount(partMask) == 1 && (partMask & validParts) == partMask) {
+                    HitResult blockHit = this.self.pick(UNZIP_RANGE, 1.0F, false);
+                    EntityHitResult entityHit = MainUtil.rayCastEntityHitResult(this.self, (float) UNZIP_RANGE);
+                    boolean unobstructed = entityHit != null
+                            && (!(blockHit instanceof BlockHitResult block)
+                            || entityHit.getLocation().distanceToSqr(this.self.getEyePosition())
+                            <= block.getLocation().distanceToSqr(this.self.getEyePosition()));
+                    if (unobstructed && entityHit.getEntity() instanceof LivingEntity target
+                            && target != this.self && !(target instanceof StandEntity)) {
+                        showDismemberedPart(target, partMask);
+                    }
+                }
+            }
+            return true;
+        }
+        return super.tryIntPower(move, forced, partMask);
     }
 
     public boolean isTagged(LivingEntity target) {
@@ -366,6 +434,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     private int grappleTicks;
     private int maxReleaseTicks;
     private int maxReleaseTargetId = -1;
+    private int maxReleaseLevel;
     private int disassembleTicks;
     private boolean wasInvulnerable;
     private boolean wasInvisible;
@@ -448,7 +517,22 @@ public class PowersStickyFingers extends NewPunchingStand {
             cancelPrimedFistClient();
             return;
         }
+        if (keyIsDown && tryReattachClient()) return;
         super.buttonInputUse(keyIsDown, options);
+    }
+
+    private boolean tryReattachClient() {
+        EntityHitResult hit = MainUtil.rayCastEntityHitResult(this.self, ZIPPER_REATTACH_RANGE);
+        if (hit == null || !(hit.getEntity() instanceof LivingEntity target)
+                || target == this.self || target instanceof StandEntity
+                || getClientDismembermentMask(target) == 0) return false;
+        HitResult blockHit = this.self.pick(ZIPPER_REATTACH_RANGE, 1.0F, false);
+        if (blockHit instanceof BlockHitResult block && block.getType() == HitResult.Type.BLOCK
+                && block.getLocation().distanceToSqr(this.self.getEyePosition())
+                < hit.getLocation().distanceToSqr(this.self.getEyePosition())) return false;
+        this.tryPower(ZIPPER_REATTACH, true);
+        tryPowerPacket(ZIPPER_REATTACH);
+        return true;
     }
 
     private void primeFist() {
@@ -542,6 +626,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         int level = getTagLevel(target);
         if (level >= TAG_MAX_LEVEL) {
             maxReleaseTargetId = target.getId();
+            maxReleaseLevel = level;
             maxReleaseTicks = MAX_RELEASE_WINDUP;
             target.addEffect(new MobEffectInstance(MobEffects.GLOWING, MAX_RELEASE_WINDUP, 0, false, true));
             this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
@@ -556,6 +641,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (!target.isAlive()) return;
         float damage = 4.0F + level * 1.65F;
         if (StandDamageEntityAttack(target, damage, 0.25F, this.self)) {
+            applyDismembermentForLevel(target, level);
             int duration = 30 + level * 12;
             target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration,
                     level >= 6 ? 2 : 1, false, true));
@@ -775,6 +861,8 @@ public class PowersStickyFingers extends NewPunchingStand {
     }
 
     public static final byte ZIPPER_GUILLOTINE = PowerIndex.POWER_4;
+    public static final byte ZIPPER_REATTACH = PowerIndex.POWER_4_EXTRA;
+    public static final float ZIPPER_REATTACH_RANGE = 3.5F;
     public static final int GUILLOTINE_DELAY = 20;
     public static final int GUILLOTINE_COOLDOWN = 160;
     public static final double GUILLOTINE_RADIUS = 3.0D;
@@ -793,7 +881,9 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public boolean setPowerOther(int move, int lastMove) {
-        if (move == UNZIP) {
+        if (move == ZIPPER_REATTACH) {
+            startReattach();
+        } else if (move == UNZIP) {
             startUnzip();
         } else if (move == MASS_UNZIP) {
             startMassUnzip();
@@ -838,6 +928,29 @@ public class PowersStickyFingers extends NewPunchingStand {
             }
         }
         return super.setPowerOther(move, lastMove);
+    }
+
+    private void startReattach() {
+        if (this.self.level().isClientSide()) return;
+        EntityHitResult hit = MainUtil.rayCastEntityHitResult(this.self, ZIPPER_REATTACH_RANGE);
+        if (hit == null || !(hit.getEntity() instanceof LivingEntity target)
+                || target == this.self || target instanceof StandEntity
+                || !(target instanceof IStickyFingersDismemberment dismemberment)
+                || dismemberment.roundabout$getStickyFingersDismemberment() == 0) return;
+
+        HitResult blockHit = this.self.pick(ZIPPER_REATTACH_RANGE, 1.0F, false);
+        if (blockHit instanceof BlockHitResult block && block.getType() == HitResult.Type.BLOCK
+                && block.getLocation().distanceToSqr(this.self.getEyePosition())
+                < hit.getLocation().distanceToSqr(this.self.getEyePosition())) return;
+
+        dismemberment.roundabout$setStickyFingersDismemberment(0);
+        target.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                SoundSource.PLAYERS, 1.0F, 1.25F);
+        if (target.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
+                    target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                    20, 0.35D, 0.45D, 0.35D, 0.03D);
+        }
     }
 
     private void endDisassemble() {
@@ -944,10 +1057,13 @@ public class PowersStickyFingers extends NewPunchingStand {
                         || target.distanceTo(this.self) > 12.0F) {
                     maxReleaseTicks = 0;
                     maxReleaseTargetId = -1;
+                    maxReleaseLevel = 0;
                 } else if (--maxReleaseTicks <= 0) {
                     float finisherDamage = Math.max(26.0F, getHeavyPunchStrength(target) * 4.5F);
                     StandDamageEntityAttack(target, finisherDamage, 0.0F, this.self);
+                    applyDismembermentForLevel(target, maxReleaseLevel);
                     removeTag(target);
+                    maxReleaseLevel = 0;
                     if (this.self.level() instanceof ServerLevel serverLevel) {
                         serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
                                 target.getX(), target.getY() + target.getBbHeight() * 0.5D,
@@ -960,7 +1076,8 @@ public class PowersStickyFingers extends NewPunchingStand {
                     int openedPartIndex = (MAX_RELEASE_WINDUP - maxReleaseTicks) / 4 - 1;
                     int[] zipperParts = { ZIPPER_PART_RIGHT_ARM, ZIPPER_PART_LEFT_ARM,
                             ZIPPER_PART_RIGHT_LEG, ZIPPER_PART_LEFT_LEG, ZIPPER_PART_HEAD };
-                    if (openedPartIndex >= 0 && openedPartIndex < zipperParts.length) {
+                    int partCount = maxReleaseLevel >= 3 ? 5 : maxReleaseLevel >= 2 ? 4 : 2;
+                    if (openedPartIndex >= 0 && openedPartIndex < partCount) {
                         showDismemberedPart(target, zipperParts[openedPartIndex]);
                     }
                     StandDamageEntityAttack(target, 2.0F, 0.0F, this.self);
@@ -1022,7 +1139,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
 
         if (sneaking && !guarding) {
-            setSkillIcon(context, x, y, 4, StandIcons.GROUND_IMPLANT, PowerIndex.SKILL_4_SNEAK);
+            setSkillIcon(context, x, y, 4, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_4_SNEAK);
         } else {
             setSkillIcon(context, x, y, 4, StandIcons.KING_CRIMSON_FINAL_PUNCH, PowerIndex.SKILL_4);
         }
@@ -1073,7 +1190,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
         list.add(drawSingleGUIIcon(context, 18, c5, r1, 0, "ability.roundabout.zipper_guillotine",
                 "instruction.roundabout.press_skill", StandIcons.KING_CRIMSON_FINAL_PUNCH, 4, level, bypass));
-        list.add(drawSingleGUIIcon(context, 18, c5, r2, 0, "ability.roundabout.zipper_limb_swap",
+        list.add(drawSingleGUIIcon(context, 18, c5, r2, 0, "ability.roundabout.zipper_limb_panel",
                 "instruction.roundabout.press_skill_crouch", StandIcons.GROUND_IMPLANT, 4, level, bypass));
 
         return list;

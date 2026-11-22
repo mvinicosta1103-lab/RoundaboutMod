@@ -10,6 +10,7 @@ import net.hydra.jojomod.access.ILevelRenderer;
 import net.hydra.jojomod.client.ClientEffectUtil;
 import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.client.StandIcons;
+import net.hydra.jojomod.client.ZipperDetachedLimbRenderer;
 import net.hydra.jojomod.entity.KingCrimsonCloneEntity;
 import net.hydra.jojomod.entity.TimeSkipSnapshot;
 import net.hydra.jojomod.entity.objects.GrabbedMobSoul;
@@ -1044,6 +1045,11 @@ public abstract class ZLevelRenderer implements ILevelRenderer {
                                         Camera $$4, GameRenderer $$5, LightTexture $$6,
                                         Matrix4f $$7, CallbackInfo ci) {
         RenderCallbackRegistry.roundabout$LEVEL_RENDER_FINISH(partialTick);
+        if (this.level != null) {
+            ZipperDetachedLimbRenderer.renderWorld($$0, partialTick, $$4,
+                    this.renderBuffers.bufferSource(), this.level);
+            this.renderBuffers.bufferSource().endBatch();
+        }
 
     }
     public final int rdbt$getPackedLightCoords(LivingEntity $$0, float $$1) {
