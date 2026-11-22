@@ -83,7 +83,7 @@ public class FabricParticles {
 
     public static final SimpleParticleType BRIEF_MAGIC_DUST = FabricParticleTypes.simple();
     public static final SimpleParticleType STITCH = FabricParticleTypes.simple();
-    public static final SimpleParticleType MOLD_DUST = FabricParticleTypes.simple();
+    // public static final SimpleParticleType MOLD_DUST = FabricParticleTypes.simple();
     public static final SimpleParticleType ZOMBIE_STITCH = FabricParticleTypes.simple();
     public static final SimpleParticleType OCCULT = FabricParticleTypes.simple();
     public static final SimpleParticleType AIRBUBBLE_PINK = FabricParticleTypes.simple();
@@ -98,7 +98,7 @@ public class FabricParticles {
     public static final SimpleParticleType RIBCAGE = FabricParticleTypes.simple();
     public static final SimpleParticleType HYPNO_SWIRL = FabricParticleTypes.simple();
     public static final SimpleParticleType TUSK_VORTEX = FabricParticleTypes.simple();
-    public static final SimpleParticleType MOLD = FabricParticleTypes.simple();
+    // public static final SimpleParticleType MOLD = FabricParticleTypes.simple();
     public static final SimpleParticleType RAGING_LIGHT = FabricParticleTypes.simple();
     public static final SimpleParticleType ALLURING_LIGHT = FabricParticleTypes.simple();
     public static final SimpleParticleType TUSK_HOLE = FabricParticleTypes.simple();
@@ -138,6 +138,19 @@ public class FabricParticles {
                     return ColorParticleOptions.codec(this);
                 }
             };
+    public static final ParticleType<ColorParticleOptions> MOLD_DUST = new ParticleType<>(false, ColorParticleOptions.DESERIALIZER) {
+        @Override
+        public Codec codec() {
+            return ColorParticleOptions.codec(this);
+        }
+    };
+
+    public static final ParticleType<ColorParticleOptions> MOLD = new ParticleType<>(false, ColorParticleOptions.DESERIALIZER) {
+        @Override
+        public Codec codec() {
+            return ColorParticleOptions.codec(this);
+        }
+    };
 
     public static final SimpleParticleType DUST_CRUMBLE = FabricParticleTypes.simple();
     public static final SimpleParticleType FIRE_CRUMBLE = FabricParticleTypes.simple();
