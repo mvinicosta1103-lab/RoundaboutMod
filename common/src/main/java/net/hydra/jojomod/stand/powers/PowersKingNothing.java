@@ -884,10 +884,10 @@ public class PowersKingNothing extends NewDashPreset {
                     if (Objects.nonNull(stand)) {
                         VisualData pdata = getVisualInfo();
                         AABB BB1 = stand.getBoundingBox();
-                        double x = BB1.getCenter().x();
-                        double y = BB1.getCenter().y() + (((FollowingStandEntity) stand).getSizePercent() - 1) / 2;
-                        double z = BB1.getCenter().z();
-                        if (spawnsParticlesThisTick()) {
+                        if (spawnsParticlesThisTick() && ClientNetworking.getAppropriateConfig().kingNothingSettings.spawnPhaseGrabParticles) {
+                            double x = BB1.getCenter().x();
+                            double y = BB1.getCenter().y() + (((FollowingStandEntity) stand).getSizePercent() - 1) / 2;
+                            double z = BB1.getCenter().z();
                             for (int i = 0; i < 2; i++) {
                                 int color = getParticleColor(pdata);
                                 MainUtil.sendParticlesIfPossible(getSelf(), getSelf().level(),
@@ -1793,11 +1793,16 @@ public class PowersKingNothing extends NewDashPreset {
             else if (held.is(ModItems.KNIFE)) {
                 projectile = new KnifeEntity(this.getSelf().level(), standPos.x(), standPos.y(), standPos.z());
             }
+            else if (held.getItem() instanceof FireworkRocketItem) {
+                projectile = new FireworkRocketEntity(this.getSelf().level(), standPos.x(), standPos.y(), standPos.z(), held);
+            }
             if (projectile != null) {
                 if (projectile instanceof ThrowableItemProjectile TP) {
                     TP.setItem(held);
                 }
-                projectile.setDeltaMovement(0, 0.2, 0);
+                if (!(projectile instanceof FireworkRocketEntity)) {
+                    projectile.setDeltaMovement(0, 0.2, 0);
+                }
                 projectile.setOwner(this.getSelf());
                 PowerTypes.copyPlaneOfExisting(self, projectile);
                 this.getSelf().level().addFreshEntity(projectile);
