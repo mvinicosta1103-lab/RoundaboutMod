@@ -528,10 +528,40 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void renderIcons(GuiGraphics context, int x, int y) {
-        setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_1);
-        setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_2);
-        setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.SKILL_3);
-        setSkillIcon(context, x, y, 4, StandIcons.KING_CRIMSON_FINAL_PUNCH, PowerIndex.SKILL_4);
+        boolean guarding = isGuarding();
+        boolean sneaking = isHoldingSneak();
+
+        if (guarding) {
+            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_STORAGE, PowerIndex.SKILL_1_GUARD);
+        } else if (sneaking) {
+            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_1_SNEAK);
+        } else {
+            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_1);
+        }
+
+        if (guarding) {
+            setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2_GUARD);
+        } else if (sneaking) {
+            setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2_SNEAK);
+        } else {
+            setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_2);
+        }
+
+        if (guarding) {
+            setSkillIcon(context, x, y, 3, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_3_GUARD);
+        } else if (sneaking) {
+            setSkillIcon(context, x, y, 3, StandIcons.WALL_WALK, PowerIndex.NO_CD);
+        } else if (canVault()) {
+            setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_VAULT, PowerIndex.GLOBAL_DASH);
+        } else {
+            setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.GLOBAL_DASH);
+        }
+
+        if (sneaking && !guarding) {
+            setSkillIcon(context, x, y, 4, StandIcons.GROUND_IMPLANT, PowerIndex.SKILL_4_SNEAK);
+        } else {
+            setSkillIcon(context, x, y, 4, StandIcons.KING_CRIMSON_FINAL_PUNCH, PowerIndex.SKILL_4);
+        }
     }
 
     @Override
