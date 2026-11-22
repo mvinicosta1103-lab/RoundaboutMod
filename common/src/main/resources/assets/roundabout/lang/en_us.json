@@ -2626,7 +2626,7 @@
   "ability.roundabout.kn_phase_item": "Phase Item",
   "ability.roundabout.kn_phase_item.desc": "King Nothing will take your held item and use it to do different things. It can do things like place blocks, mine blocks, and even attack enemies!",
   "ability.roundabout.kn_drop_item": "Drop Item",
-  "ability.roundabout.kn_drop_item.desc": "King Nothing will drop its currently held item where it is. Certain items like ender pearls and potions will do special things when dropped.",
+  "ability.roundabout.kn_drop_item.desc": "King Nothing will drop its currently held item where it is. Certain items like ender pearls and potions will do special things when dropped. Holding sneak will disable any special interactions, in case you don't want to do them.",
   "ability.roundabout.kn_form_predict": "Form Prediction",
   "ability.roundabout.kn_form_predict.desc": "Memorize the scent of the original form of your currently held item.",
   "ability.roundabout.kn_sniff": "Memorize Scent",
@@ -4374,6 +4374,9 @@
 
   "config.roundabout.hexTwoSealsPotions.name": "Banish Blocks Potions",
   "config.roundabout.hexTwoSealsPotions.desc": "Whether banish prevents drinking and splashing potions while applied",
+
+  "config.roundabout.meleeSwapPenalty.name": "Melee Swap Penalty",
+  "config.roundabout.meleeSwapPenalty.desc": "If attacking with melee slows down your stand punch recharge. Reduces toxic hugging in pvp and forces people to use their brains more.",
 
 
   "config.roundabout.bonusStandDmgByMaxLevel.name": "Bonus Levelup Damage",
