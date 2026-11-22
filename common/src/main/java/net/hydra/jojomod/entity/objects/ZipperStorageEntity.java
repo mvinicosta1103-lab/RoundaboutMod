@@ -1,10 +1,12 @@
 package net.hydra.jojomod.entity.objects;
 
 import net.hydra.jojomod.entity.ModEntities;
+import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.event.ModGamerules;
 import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.powers.StandUser;
 import net.hydra.jojomod.event.powers.ModDamageTypes;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.item.KnifeItem;
 import net.hydra.jojomod.util.MainUtil;
 import net.hydra.jojomod.util.ZipperStorageData;
@@ -98,8 +100,13 @@ public class ZipperStorageEntity extends ZipperEntity {
         return mobUUID;
     }
 
-    public static boolean isStandUser(Player player) {
-        return player != null && ((StandUser) player).roundabout$hasAStand();
+    public static boolean isStickyFingersUser(Player player) {
+        return player instanceof StandUser standUser
+                && standUser.roundabout$getStandPowers() instanceof PowersStickyFingers;
+    }
+
+    private boolean localPlayerHasStickyFingers() {
+        return !this.level().isClientSide() || isStickyFingersUser(ClientUtil.getPlayer());
     }
 
     public BlockPos getFrontPos() {
@@ -127,7 +134,7 @@ public class ZipperStorageEntity extends ZipperEntity {
 
     @Override
     public boolean isHiddenFromLocalPlayer() {
-        return !localPlayerHasStand();
+        return !localPlayerHasStickyFingers();
     }
 
     @Override
@@ -135,21 +142,31 @@ public class ZipperStorageEntity extends ZipperEntity {
         if (this.isRemoved() || mobMode || getState() == STATE_CLOSING) {
             return false;
         }
-        return localPlayerHasStand();
+        return localPlayerHasStickyFingers();
     }
 
     @Override
     public InteractionResult interact(Player player, InteractionHand hand) {
-        if (mobMode) {
+        if (mobMode || !isStickyFingersUser(player)) {
             return InteractionResult.PASS;
         }
         if (this.level().isClientSide()) {
             return InteractionResult.SUCCESS;
         }
         if (player instanceof ServerPlayer serverPlayer && this.level() instanceof ServerLevel serverLevel) {
-            SimpleContainer storage = ZipperStorageData.get(serverLevel).getContainer(serverPlayer.getUUID());
+            ZipperStorageData storageData = ZipperStorageData.get(serverLevel);
+            int rows = Mth.clamp(getConnectedZippers().size(), 1, 6);
+            SimpleContainer storage = storageData.getContainer(serverPlayer.getUUID(), rows * 9);
+            MenuType<?> menuType = switch (rows) {
+                case 2 -> MenuType.GENERIC_9x2;
+                case 3 -> MenuType.GENERIC_9x3;
+                case 4 -> MenuType.GENERIC_9x4;
+                case 5 -> MenuType.GENERIC_9x5;
+                case 6 -> MenuType.GENERIC_9x6;
+                default -> MenuType.GENERIC_9x1;
+            };
             serverPlayer.openMenu(new SimpleMenuProvider(
-                    (id, inventory, p) -> new ChestMenu(MenuType.GENERIC_9x1, id, inventory, storage, 1),
+                    (id, inventory, p) -> new ChestMenu(menuType, id, inventory, storage, rows),
                     Component.translatable("roundabout.zipper_storage.title")));
             viewers.add(serverPlayer.getUUID());
             if (getState() == STATE_STORAGE) {

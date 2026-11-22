@@ -24,11 +24,32 @@ public class ZipperStorageData extends SavedData {
     }
 
     public SimpleContainer getContainer(UUID player) {
-        return storages.computeIfAbsent(player, id -> createContainer());
+        return getContainer(player, SLOTS);
     }
 
-    private SimpleContainer createContainer() {
-        SimpleContainer container = new SimpleContainer(SLOTS);
+    public SimpleContainer getContainer(UUID player, int requiredSlots) {
+        int requestedSize = toRowSize(requiredSlots);
+        SimpleContainer existing = storages.computeIfAbsent(player, id -> createContainer(SLOTS));
+        if (existing.getContainerSize() >= requestedSize) {
+            return existing;
+        }
+
+        SimpleContainer expanded = createContainer(requestedSize);
+        for (int slot = 0; slot < existing.getContainerSize(); slot++) {
+            expanded.setItem(slot, existing.getItem(slot).copy());
+        }
+        storages.put(player, expanded);
+        this.setDirty();
+        return expanded;
+    }
+
+    private static int toRowSize(int requestedSlots) {
+        int rows = Math.max(1, Math.min(6, (Math.max(SLOTS, requestedSlots) + 8) / 9));
+        return rows * 9;
+    }
+
+    private SimpleContainer createContainer(int size) {
+        SimpleContainer container = new SimpleContainer(size);
         container.addListener(changed -> this.setDirty());
         return container;
     }
@@ -38,8 +59,13 @@ public class ZipperStorageData extends SavedData {
         ListTag players = tag.getList("players", Tag.TAG_COMPOUND);
         for (int i = 0; i < players.size(); i++) {
             CompoundTag entry = players.getCompound(i);
-            SimpleContainer container = data.createContainer();
-            container.fromTag(entry.getList("items", Tag.TAG_COMPOUND));
+            ListTag items = entry.getList("items", Tag.TAG_COMPOUND);
+            int requiredSize = SLOTS;
+            for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+                requiredSize = Math.max(requiredSize, items.getCompound(itemIndex).getByte("Slot") + 1);
+            }
+            SimpleContainer container = data.createContainer(toRowSize(requiredSize));
+            container.fromTag(items);
             data.storages.put(entry.getUUID("id"), container);
         }
         return data;

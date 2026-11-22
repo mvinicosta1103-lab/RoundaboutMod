@@ -10,6 +10,7 @@ import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.powers.ModDamageTypes;
 import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.event.powers.StandUser;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -46,7 +47,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public class ZipperEntity extends Entity {
@@ -58,16 +64,23 @@ public class ZipperEntity extends Entity {
     public static final int STATE_MINING = 4;
     public static final int STATE_STORAGE = 5;
     public static final int STATE_STORAGE_OPEN = 6;
+    public static final int STATE_OPENING = 7;
+
+    private static final int OPEN_ACTION_TUNNEL = 2;
 
     public static final int NEUTRAL_LIFE = 400;
     public static final int HIDE_TICKS = 160;
     public static final int TUNNEL_TICKS = 100;
     public static final int OPEN_ANIM_TICKS = 8;
-    public static final int CLOSE_ANIM_TICKS = 8;
+    /** Time for the zipper to retract after its opening window expires (20 ticks = 1 second). */
+    public static final int CLOSE_ANIM_TICKS = 20;
 
     public static final int TUNNEL_DEPTH_WALL = 5;
     public static final int TUNNEL_DEPTH_FLOOR = 6;
     public static final int MAX_SWALLOWED = 3;
+    public static final double ZIPPER_LINK_DISTANCE = 3.0D;
+    private static final int MAX_CONNECTED_ZIPPERS = 64;
+    private static final int MAX_MERGED_TUNNEL_BLOCKS = 512;
 
     protected static final EntityDataAccessor<Integer> STATE = SynchedEntityData.defineId(ZipperEntity.class,
             EntityDataSerializers.INT);
@@ -77,6 +90,12 @@ public class ZipperEntity extends Entity {
             EntityDataSerializers.INT);
     protected static final EntityDataAccessor<Boolean> MINI = SynchedEntityData.defineId(ZipperEntity.class,
             EntityDataSerializers.BOOLEAN);
+    protected static final EntityDataAccessor<Optional<UUID>> OWNER = SynchedEntityData.defineId(ZipperEntity.class,
+            EntityDataSerializers.OPTIONAL_UUID);
+    protected static final EntityDataAccessor<BlockPos> ANCHOR = SynchedEntityData.defineId(ZipperEntity.class,
+            EntityDataSerializers.BLOCK_POS);
+    protected static final EntityDataAccessor<Integer> BASE_Y = SynchedEntityData.defineId(ZipperEntity.class,
+            EntityDataSerializers.INT);
 
     protected UUID ownerUUID = null;
     protected BlockPos anchor = BlockPos.ZERO;
@@ -84,6 +103,7 @@ public class ZipperEntity extends Entity {
     protected int stateTicks = 0;
     private int mineDelay = 0;
     private int biteTick = -1;
+    private int pendingOpenAction = 0;
     private final List<UUID> swallowed = new ArrayList<>();
     private float lastHealth = 0;
     private int lastFood = 0;
@@ -110,6 +130,9 @@ public class ZipperEntity extends Entity {
         this.ownerUUID = owner.getUUID();
         this.anchor = anchor;
         this.baseY = baseY;
+        this.entityData.set(OWNER, Optional.of(ownerUUID));
+        this.entityData.set(ANCHOR, anchor);
+        this.entityData.set(BASE_Y, baseY);
         this.entityData.set(FACE, face.get3DDataValue());
         this.entityData.set(MINI, mini);
         this.entityData.set(STATE_START, 0);
@@ -131,6 +154,9 @@ public class ZipperEntity extends Entity {
         this.entityData.define(FACE, Direction.UP.get3DDataValue());
         this.entityData.define(STATE_START, 0);
         this.entityData.define(MINI, false);
+        this.entityData.define(OWNER, Optional.empty());
+        this.entityData.define(ANCHOR, BlockPos.ZERO);
+        this.entityData.define(BASE_Y, 0);
     }
 
     public int getState() {
@@ -152,8 +178,323 @@ public class ZipperEntity extends Entity {
     }
 
     public BlockPos getAnchor() {
-        return anchor;
+        return this.entityData.get(ANCHOR);
     }
+
+    public int getBaseY() {
+        return this.entityData.get(BASE_Y);
+    }
+
+    public UUID getOwnerUUID() {
+        return this.entityData.get(OWNER).orElse(ownerUUID);
+    }
+
+    public List<ZipperEntity> getConnectedZippers() {
+        if (!canJoinZipperGroup(this)) {
+            return List.of(this);
+        }
+
+        Set<ZipperEntity> found = new HashSet<>();
+        List<ZipperEntity> pending = new ArrayList<>();
+        found.add(this);
+        pending.add(this);
+        for (int index = 0; index < pending.size() && found.size() < MAX_CONNECTED_ZIPPERS; index++) {
+            ZipperEntity current = pending.get(index);
+            AABB search = current.getBoundingBox().inflate(ZIPPER_LINK_DISTANCE + 2.1D);
+            for (ZipperEntity candidate : this.level().getEntitiesOfClass(ZipperEntity.class, search)) {
+                if (found.size() >= MAX_CONNECTED_ZIPPERS) {
+                    break;
+                }
+                if (!found.contains(candidate) && canConnectTo(current, candidate)) {
+                    found.add(candidate);
+                    pending.add(candidate);
+                }
+            }
+        }
+        List<ZipperEntity> result = new ArrayList<>(found);
+        result.sort(Comparator.comparingInt(Entity::getId));
+        return result;
+    }
+
+    private List<ZipperEntity> getUnzipGroup() {
+        if (this instanceof ZipperStorageEntity || isMini()) {
+            return List.of(this);
+        }
+        return getConnectedZippers();
+    }
+
+    private void setUnzipGroupState(int state, int openAction) {
+        for (ZipperEntity zipper : getUnzipGroup()) {
+            zipper.pendingOpenAction = openAction;
+            zipper.setState(state);
+        }
+    }
+
+    public ZipperEntity getMergedRenderLeader() {
+        List<ZipperEntity> connected = getConnectedZippers();
+        ZipperEntity leader = this;
+        int bestPriority = mergeRenderPriority(this);
+        for (ZipperEntity candidate : connected) {
+            int priority = mergeRenderPriority(candidate);
+            if (priority > bestPriority || (priority == bestPriority && candidate.getId() < leader.getId())) {
+                leader = candidate;
+                bestPriority = priority;
+            }
+        }
+        return leader;
+    }
+
+    public MergeRenderLayout getMergeRenderLayout(float baseHalfWidth, float baseLength,
+                                                   boolean geometryStartsAtBase) {
+        Direction face = getFace();
+        double localXAxisX = face.getAxis() == Direction.Axis.Y ? 1.0D : face.getCounterClockWise().getStepX();
+        double localXAxisZ = face.getAxis() == Direction.Axis.Y ? 0.0D : face.getCounterClockWise().getStepZ();
+        double localYAxisX = 0.0D;
+        double localYAxisY = 0.0D;
+        double localYAxisZ;
+        if (face == Direction.UP) {
+            localYAxisZ = -1.0D;
+        } else if (face == Direction.DOWN) {
+            localYAxisZ = 1.0D;
+        } else {
+            localYAxisY = 1.0D;
+            localYAxisZ = 0.0D;
+        }
+
+        List<double[]> centers = new ArrayList<>();
+        for (ZipperEntity member : getConnectedZippers()) {
+            Vec3 offset = member.position().subtract(this.position());
+            double centerX = offset.x * localXAxisX + offset.z * localXAxisZ;
+            double centerY;
+            if (face.getAxis() == Direction.Axis.Y) {
+                centerY = offset.x * localYAxisX + offset.y * localYAxisY + offset.z * localYAxisZ;
+            } else {
+                centerY = member.getBaseY() - this.getBaseY()
+                        + (geometryStartsAtBase ? baseLength / 2.0D : 0.0D);
+            }
+            centers.add(new double[] {centerX, centerY});
+        }
+
+        double meanX = centers.stream().mapToDouble(point -> point[0]).average().orElse(0.0D);
+        double meanY = centers.stream().mapToDouble(point -> point[1]).average().orElse(0.0D);
+        double covarianceXX = 0.0D;
+        double covarianceYY = 0.0D;
+        double covarianceXY = 0.0D;
+        for (double[] point : centers) {
+            double dx = point[0] - meanX;
+            double dy = point[1] - meanY;
+            covarianceXX += dx * dx;
+            covarianceYY += dy * dy;
+            covarianceXY += dx * dy;
+        }
+        double variance = covarianceXX + covarianceYY;
+        double principalAngle = variance < 1.0E-6D
+                ? Math.PI / 2.0D
+                : 0.5D * Math.atan2(2.0D * covarianceXY, covarianceXX - covarianceYY);
+        double rotationRadians = principalAngle - Math.PI / 2.0D;
+        double cos = Math.cos(rotationRadians);
+        double sin = Math.sin(rotationRadians);
+        double minX = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
+        for (double[] point : centers) {
+            double centerX = point[0] * cos + point[1] * sin;
+            double centerY = -point[0] * sin + point[1] * cos;
+            minX = Math.min(minX, centerX - baseHalfWidth);
+            maxX = Math.max(maxX, centerX + baseHalfWidth);
+            minY = Math.min(minY, centerY - baseLength / 2.0D);
+            maxY = Math.max(maxY, centerY + baseLength / 2.0D);
+        }
+        return new MergeRenderLayout((float) ((minX + maxX) / 2.0D),
+                (float) ((minY + maxY) / 2.0D),
+                (float) Math.max(baseHalfWidth * 2.0D, maxX - minX),
+                (float) Math.max(baseLength, maxY - minY),
+                (float) Math.toDegrees(rotationRadians));
+    }
+
+    public List<ZipperPathCell> getMergedFloorPath() {
+        if (getFace().getAxis() != Direction.Axis.Y) {
+            return List.of();
+        }
+        List<ZipperEntity> connected = getConnectedZippers();
+        if (connected.size() <= 1) {
+            return List.of();
+        }
+
+        int zSign = getFace() == Direction.UP ? -1 : 1;
+        int originU = getAnchor().getX();
+        int originV = getAnchor().getZ() * zSign;
+        Set<ZipperPathCell> actual = new HashSet<>();
+        for (ZipperEntity zipper : connected) {
+            BlockPos zipperAnchor = zipper.getAnchor();
+            actual.add(new ZipperPathCell(zipperAnchor.getX(), zipperAnchor.getZ() * zSign));
+        }
+
+        Set<ZipperPathCell> path = new HashSet<>(actual);
+        int maxBridge = (int) Math.ceil(ZIPPER_LINK_DISTANCE + 1.0D);
+        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (ZipperPathCell cell : actual) {
+            for (int[] direction : directions) {
+                for (int distance = 1; distance <= maxBridge; distance++) {
+                    ZipperPathCell neighbor = new ZipperPathCell(
+                            cell.u() + direction[0] * distance,
+                            cell.v() + direction[1] * distance);
+                    if (actual.contains(neighbor)) {
+                        for (int step = 1; step < distance; step++) {
+                            path.add(new ZipperPathCell(cell.u() + direction[0] * step,
+                                    cell.v() + direction[1] * step));
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        while (true) {
+            List<Set<ZipperPathCell>> components = getPathComponents(path);
+            if (components.size() <= 1) {
+                break;
+            }
+            ZipperPathCell first = null;
+            ZipperPathCell second = null;
+            int bestDistance = Integer.MAX_VALUE;
+            for (ZipperPathCell a : actual) {
+                int componentA = findPathComponent(components, a);
+                for (ZipperPathCell b : actual) {
+                    if (findPathComponent(components, b) == componentA) {
+                        continue;
+                    }
+                    int distance = Math.abs(a.u() - b.u()) + Math.abs(a.v() - b.v());
+                    if (distance < bestDistance && distance <= maxBridge * 2) {
+                        first = a;
+                        second = b;
+                        bestDistance = distance;
+                    }
+                }
+            }
+            if (first == null || second == null) {
+                break;
+            }
+            int u = first.u();
+            int uStep = Integer.compare(second.u(), u);
+            while (u != second.u()) {
+                u += uStep;
+                path.add(new ZipperPathCell(u, first.v()));
+            }
+            int v = first.v();
+            int vStep = Integer.compare(second.v(), v);
+            while (v != second.v()) {
+                v += vStep;
+                path.add(new ZipperPathCell(second.u(), v));
+            }
+        }
+
+        List<ZipperPathCell> relative = new ArrayList<>();
+        for (ZipperPathCell cell : path) {
+            relative.add(new ZipperPathCell(cell.u() - originU, cell.v() - originV));
+        }
+        relative.sort(Comparator.comparingInt(ZipperPathCell::u).thenComparingInt(ZipperPathCell::v));
+        return relative;
+    }
+
+    private static List<Set<ZipperPathCell>> getPathComponents(Set<ZipperPathCell> cells) {
+        List<Set<ZipperPathCell>> components = new ArrayList<>();
+        Set<ZipperPathCell> visited = new HashSet<>();
+        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (ZipperPathCell start : cells) {
+            if (!visited.add(start)) {
+                continue;
+            }
+            Set<ZipperPathCell> component = new HashSet<>();
+            List<ZipperPathCell> pending = new ArrayList<>();
+            component.add(start);
+            pending.add(start);
+            for (int index = 0; index < pending.size(); index++) {
+                ZipperPathCell current = pending.get(index);
+                for (int[] direction : directions) {
+                    ZipperPathCell neighbor = new ZipperPathCell(
+                            current.u() + direction[0], current.v() + direction[1]);
+                    if (cells.contains(neighbor) && visited.add(neighbor)) {
+                        component.add(neighbor);
+                        pending.add(neighbor);
+                    }
+                }
+            }
+            components.add(component);
+        }
+        return components;
+    }
+
+    private static int findPathComponent(List<Set<ZipperPathCell>> components, ZipperPathCell cell) {
+        for (int index = 0; index < components.size(); index++) {
+            if (components.get(index).contains(cell)) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    public record ZipperPathCell(int u, int v) {}
+
+    private boolean canJoinZipperGroup(ZipperEntity zipper) {
+        if (zipper instanceof ZipperStorageEntity storage) {
+            return !storage.isMobMode() && (zipper.getState() == STATE_STORAGE
+                    || zipper.getState() == STATE_STORAGE_OPEN || zipper.getState() == STATE_CLOSING);
+        }
+        return !zipper.isMini() && (zipper.getState() == STATE_NEUTRAL || zipper.getState() == STATE_OPENING
+                || zipper.getState() == STATE_TUNNEL || zipper.getState() == STATE_CLOSING);
+    }
+
+    private boolean canConnectTo(ZipperEntity source, ZipperEntity candidate) {
+        if (candidate == source || !source.canJoinZipperGroup(source) || !source.canJoinZipperGroup(candidate)
+                || source.getOwnerUUID() == null || !source.getOwnerUUID().equals(candidate.getOwnerUUID())
+                || source.getFace() != candidate.getFace()) {
+            return false;
+        }
+        boolean sourceStorage = source instanceof ZipperStorageEntity;
+        boolean candidateStorage = candidate instanceof ZipperStorageEntity;
+        if (sourceStorage != candidateStorage) {
+            return false;
+        }
+        Direction face = source.getFace();
+        BlockPos sourceAnchor = source.getAnchor();
+        BlockPos candidateAnchor = candidate.getAnchor();
+        int dx = sourceAnchor.getX() - candidateAnchor.getX();
+        int dy = sourceAnchor.getY() - candidateAnchor.getY();
+        int dz = sourceAnchor.getZ() - candidateAnchor.getZ();
+        int normalOffset = dx * face.getStepX() + dy * face.getStepY() + dz * face.getStepZ();
+        if ((dx == 0 && dy == 0 && dz == 0) || Math.abs(normalOffset) > 1) {
+            return false;
+        }
+
+        double tangentX = dx - normalOffset * face.getStepX();
+        double tangentY = dy - normalOffset * face.getStepY();
+        double tangentZ = dz - normalOffset * face.getStepZ();
+        Direction localX = face.getAxis() == Direction.Axis.Y ? Direction.EAST : face.getCounterClockWise();
+        double centerX = tangentX * localX.getStepX() + tangentZ * localX.getStepZ();
+        double centerY = face.getAxis() == Direction.Axis.Y
+                ? tangentZ * (face == Direction.UP ? -1.0D : 1.0D)
+                : tangentY;
+        boolean storage = source instanceof ZipperStorageEntity;
+        double halfWidthSum = 0.92D;
+        double length = storage ? 0.8D : face.getAxis() == Direction.Axis.Y ? 1.0D : 2.0D;
+        double gapX = Math.max(0.0D, Math.abs(centerX) - halfWidthSum);
+        double gapY = Math.max(0.0D, Math.abs(centerY) - length);
+        return gapX * gapX + gapY * gapY <= ZIPPER_LINK_DISTANCE * ZIPPER_LINK_DISTANCE;
+    }
+
+    private static int mergeRenderPriority(ZipperEntity zipper) {
+        return switch (zipper.getState()) {
+            case STATE_OPENING -> 3;
+            case STATE_TUNNEL, STATE_STORAGE_OPEN -> 2;
+            case STATE_CLOSING -> 1;
+            default -> 0;
+        };
+    }
+
+    public record MergeRenderLayout(float centerX, float centerY, float width, float length,
+                                    float rotationDegrees) {}
 
     public boolean isHiddenFromLocalPlayer() {
         return false;
@@ -172,14 +513,16 @@ public class ZipperEntity extends Entity {
     }
 
     public boolean isOwner(Entity entity) {
-        return entity != null && ownerUUID != null && ownerUUID.equals(entity.getUUID());
+        UUID owner = getOwnerUUID();
+        return entity != null && owner != null && owner.equals(entity.getUUID());
     }
 
     public Player getOwnerPlayer() {
-        if (ownerUUID == null) {
+        UUID owner = getOwnerUUID();
+        if (owner == null) {
             return null;
         }
-        return this.level().getPlayerByUUID(ownerUUID);
+        return this.level().getPlayerByUUID(owner);
     }
 
     @Override
@@ -255,7 +598,7 @@ public class ZipperEntity extends Entity {
         if (player.isShiftKeyDown()) {
             releaseSwallowed();
         } else {
-            startHiding(player);
+            startOpening(OPEN_ACTION_TUNNEL);
         }
         return InteractionResult.CONSUME;
     }
@@ -270,10 +613,23 @@ public class ZipperEntity extends Entity {
             attacker = source.getDirectEntity();
         }
         if (attacker instanceof Player player && isOwner(player) && getState() == STATE_NEUTRAL) {
-            startTunnel(player);
+            startOpening(OPEN_ACTION_TUNNEL);
             return true;
         }
         return false;
+    }
+
+    private void startOpening(int action) {
+        List<ZipperEntity> group = getUnzipGroup();
+        if (group.stream().anyMatch(zipper -> zipper.getState() != STATE_NEUTRAL)) {
+            return;
+        }
+        for (ZipperEntity zipper : group) {
+            zipper.pendingOpenAction = action;
+            zipper.setState(STATE_OPENING);
+        }
+        this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                SoundSource.PLAYERS, 0.9F, 1.35F);
     }
 
     private void startHiding(Player owner) {
@@ -362,16 +718,105 @@ public class ZipperEntity extends Entity {
         return list;
     }
 
+    private List<BlockPos> computeMergedTunnel() {
+        List<ZipperEntity> connected = getConnectedZippers();
+        if (connected.size() <= 1) {
+            return computeTunnel();
+        }
+
+        Direction face = getFace();
+        Direction inward = face.getOpposite();
+        if (face.getAxis() == Direction.Axis.Y) {
+            List<ZipperPathCell> path = getMergedFloorPath();
+            Set<BlockPos> floorPositions = new LinkedHashSet<>();
+            int zSign = face == Direction.UP ? -1 : 1;
+            for (ZipperPathCell cell : path) {
+                int x = anchor.getX() + cell.u();
+                int z = anchor.getZ() + cell.v() * zSign;
+                for (int depth = 0; depth < TUNNEL_DEPTH_FLOOR
+                        && floorPositions.size() < MAX_MERGED_TUNNEL_BLOCKS; depth++) {
+                    int y = anchor.getY() + inward.getStepY() * depth;
+                    floorPositions.add(new BlockPos(x, y, z));
+                }
+            }
+            return new ArrayList<>(floorPositions);
+        }
+
+        MergeRenderLayout layout = getMergeRenderLayout(0.46F, face.getAxis() == Direction.Axis.Y ? 1.0F : 2.0F, true);
+        double baseXAxisX = face.getAxis() == Direction.Axis.Y ? 1.0D : face.getCounterClockWise().getStepX();
+        double baseXAxisZ = face.getAxis() == Direction.Axis.Y ? 0.0D : face.getCounterClockWise().getStepZ();
+        Vec3 baseX = new Vec3(baseXAxisX, 0.0D, baseXAxisZ);
+        Vec3 baseYAxis = face == Direction.UP ? new Vec3(0.0D, 0.0D, -1.0D)
+                : face == Direction.DOWN ? new Vec3(0.0D, 0.0D, 1.0D) : new Vec3(0.0D, 1.0D, 0.0D);
+        double radians = Math.toRadians(layout.rotationDegrees());
+        double cos = Math.cos(radians);
+        double sin = Math.sin(radians);
+        Vec3 zipperX = baseX.scale(cos).add(baseYAxis.scale(sin));
+        Vec3 zipperY = baseX.scale(-sin).add(baseYAxis.scale(cos));
+        Vec3 center = this.position().add(zipperX.scale(layout.centerX())).add(zipperY.scale(layout.centerY()));
+        double halfWidth = layout.width() * (0.40D / 0.92D) / 2.0D;
+        double halfLength = layout.length() / 2.0D;
+        int padding = Mth.ceil(Math.max(halfWidth, halfLength)) + 1;
+        Set<BlockPos> positions = new LinkedHashSet<>();
+        if (face.getAxis() == Direction.Axis.X) {
+            int minZ = connected.stream().mapToInt(zipper -> zipper.anchor.getZ()).min().orElse(anchor.getZ());
+            int maxZ = connected.stream().mapToInt(zipper -> zipper.anchor.getZ()).max().orElse(anchor.getZ());
+            int minY = connected.stream().mapToInt(zipper -> zipper.baseY).min().orElse(this.baseY);
+            int maxY = connected.stream().mapToInt(zipper -> zipper.baseY + 1).max().orElse(this.baseY + 1);
+            for (int depth = 0; depth < TUNNEL_DEPTH_WALL && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; depth++) {
+                int x = anchor.getX() + inward.getStepX() * depth;
+                for (int z = minZ - padding; z <= maxZ + padding && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; z++) {
+                    for (int y = minY - padding; y <= maxY + padding && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; y++) {
+                        addTunnelBlockIfInside(positions, new BlockPos(x, y, z), center, zipperX, zipperY,
+                                halfWidth, halfLength);
+                    }
+                }
+            }
+        } else {
+            int minX = connected.stream().mapToInt(zipper -> zipper.anchor.getX()).min().orElse(anchor.getX());
+            int maxX = connected.stream().mapToInt(zipper -> zipper.anchor.getX()).max().orElse(anchor.getX());
+            int minY = connected.stream().mapToInt(zipper -> zipper.baseY).min().orElse(this.baseY);
+            int maxY = connected.stream().mapToInt(zipper -> zipper.baseY + 1).max().orElse(this.baseY + 1);
+            for (int depth = 0; depth < TUNNEL_DEPTH_WALL && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; depth++) {
+                int z = anchor.getZ() + inward.getStepZ() * depth;
+                for (int x = minX - padding; x <= maxX + padding && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; x++) {
+                    for (int y = minY - padding; y <= maxY + padding && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; y++) {
+                        addTunnelBlockIfInside(positions, new BlockPos(x, y, z), center, zipperX, zipperY,
+                                halfWidth, halfLength);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(positions);
+    }
+
+    private static void addTunnelBlockIfInside(Set<BlockPos> positions, BlockPos pos, Vec3 center,
+                                               Vec3 zipperX, Vec3 zipperY,
+                                               double halfWidth, double halfLength) {
+        Vec3 blockCenter = Vec3.atCenterOf(pos);
+        Vec3 offset = blockCenter.subtract(center);
+        if (Math.abs(offset.dot(zipperX)) <= halfWidth + 0.5D
+                && Math.abs(offset.dot(zipperY)) <= halfLength + 0.5D) {
+            positions.add(pos);
+        }
+    }
+
     private void startTunnel(Player owner) {
+        // The first member that finishes its opening animation performs the shared action.
+        // Updating the whole group makes the remaining members skip this call.
+        if (getState() != STATE_OPENING) {
+            return;
+        }
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
         if (!serverLevel.getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING)) {
             owner.displayClientMessage(Component.translatable("roundabout.zipper.no_griefing"), true);
+            close();
             return;
         }
         int opened = 0;
-        for (BlockPos pos : computeTunnel()) {
+        for (BlockPos pos : computeMergedTunnel()) {
             if (!canZip(serverLevel, pos)) {
                 continue;
             }
@@ -381,16 +826,18 @@ public class ZipperEntity extends Entity {
             serverLevel.setBlock(pos, ModBlocks.ZIPPER_SPACE.defaultBlockState(), 3);
             BlockEntity be = serverLevel.getBlockEntity(pos);
             if (be instanceof ZipperSpaceBlockEntity space) {
-                space.setup(original, TUNNEL_TICKS);
+                // Keep the temporary passage open until the zipper has finished closing.
+                space.setup(original, TUNNEL_TICKS + CLOSE_ANIM_TICKS);
             }
             opened++;
         }
         if (opened == 0) {
             owner.displayClientMessage(Component.translatable("roundabout.zipper.nothing_to_unzip"), true);
+            close();
             return;
         }
         releaseSwallowed();
-        setState(STATE_TUNNEL);
+        setUnzipGroupState(STATE_TUNNEL, 0);
         serverLevel.playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2F, 0.6F);
         serverLevel.playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.5F);
         sparkBurst(this.position().add(0, 1.0D, 0), 24);
@@ -459,13 +906,22 @@ public class ZipperEntity extends Entity {
     }
 
     public void close() {
-        if (this.level().isClientSide() || getState() == STATE_CLOSING) {
+        if (this.level().isClientSide()) {
             return;
         }
-        releaseSwallowed();
-        setState(STATE_CLOSING);
-        this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 0.8F, 0.8F);
+        boolean changed = false;
+        for (ZipperEntity zipper : getUnzipGroup()) {
+            zipper.releaseSwallowed();
+            if (zipper.getState() != STATE_CLOSING) {
+                zipper.pendingOpenAction = 0;
+                zipper.setState(STATE_CLOSING);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                    SoundSource.PLAYERS, 0.8F, 0.8F);
+        }
     }
 
     @Override
@@ -487,10 +943,20 @@ public class ZipperEntity extends Entity {
                     close();
                     return;
                 }
-                if (stateTicks % 4 == 0) {
-                    swallowNearby();
+            }
+            case STATE_OPENING -> {
+                if (stateTicks >= OPEN_ANIM_TICKS) {
+                    int action = pendingOpenAction;
+                    pendingOpenAction = 0;
+                    Player owner = getOwnerPlayer();
+                    if (owner == null || !owner.isAlive()) {
+                        close();
+                    } else if (action == OPEN_ACTION_TUNNEL) {
+                        startTunnel(owner);
+                    } else {
+                        close();
+                    }
                 }
-                holdSwallowed();
             }
             case STATE_HIDING -> tickHiding();
             case STATE_TUNNEL -> {
@@ -530,6 +996,10 @@ public class ZipperEntity extends Entity {
                     ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, owner)
                     : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
             if (target.hurt(source, BITE_DAMAGE)) {
+                if (owner instanceof StandUser standUser
+                        && standUser.roundabout$getStandPowers() instanceof PowersStickyFingers powers) {
+                    powers.addTag(target);
+                }
                 Vec3 motion = target.getDeltaMovement();
                 target.setDeltaMovement(motion.x, Math.max(motion.y, 0.4D), motion.z);
                 target.hurtMarked = true;
@@ -586,7 +1056,7 @@ public class ZipperEntity extends Entity {
 
     private void tickClientParticles() {
         int state = getState();
-        boolean sparkling = state == STATE_NEUTRAL || state == STATE_TUNNEL || state == STATE_STORAGE_OPEN
+        boolean sparkling = state == STATE_OPENING || state == STATE_TUNNEL || state == STATE_STORAGE_OPEN
                 || (state == STATE_MINING && this.tickCount >= getStateStart() + OPEN_ANIM_TICKS);
         if (!sparkling || this.tickCount % 3 != 0 || isHiddenFromLocalPlayer()) {
             return;
@@ -616,7 +1086,11 @@ public class ZipperEntity extends Entity {
         }
         anchor = new BlockPos(tag.getInt("ax"), tag.getInt("ay"), tag.getInt("az"));
         baseY = tag.getInt("baseY");
+        this.entityData.set(OWNER, Optional.ofNullable(ownerUUID));
+        this.entityData.set(ANCHOR, anchor);
+        this.entityData.set(BASE_Y, baseY);
         stateTicks = tag.getInt("stateTicks");
+        pendingOpenAction = tag.getInt("pendingOpenAction");
         mineDelay = tag.getInt("mineDelay");
         this.entityData.set(MINI, tag.getBoolean("mini"));
         this.entityData.set(FACE, tag.getInt("face"));
@@ -638,6 +1112,7 @@ public class ZipperEntity extends Entity {
         tag.putInt("az", anchor.getZ());
         tag.putInt("baseY", baseY);
         tag.putInt("stateTicks", stateTicks);
+        tag.putInt("pendingOpenAction", pendingOpenAction);
         tag.putInt("mineDelay", mineDelay);
         tag.putBoolean("mini", isMini());
         tag.putInt("face", this.entityData.get(FACE));

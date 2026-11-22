@@ -1360,7 +1360,13 @@ public class ClientUtil {
         }
     }
     public static void handleDoubleIntPacketS2C(Player player, int data, int data2, byte context) {
-        if (context == PacketDataIndex.S2C_INT_FADE){
+        if (context == PacketDataIndex.S2C_ZIPPER_MARK) {
+            PowersStickyFingers.updateClientTagLevel(data, data2);
+        } else if (context == PacketDataIndex.S2C_ZIPPER_DISMEMBERMENT) {
+            int part = data2 & 0xFF;
+            int duration = data2 >>> 8;
+            PowersStickyFingers.updateClientDismemberment(data, part, duration);
+        } else if (context == PacketDataIndex.S2C_INT_FADE){
             Entity target = player.level().getEntity(data);
             if (target instanceof Player pl) {
                 ((IPowersPlayer) pl).rdbt$getPowers().setFaded(data2);

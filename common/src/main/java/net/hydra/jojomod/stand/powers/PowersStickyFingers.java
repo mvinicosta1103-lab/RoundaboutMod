@@ -5,10 +5,12 @@ import net.hydra.jojomod.client.StandIcons;
 import net.hydra.jojomod.entity.ModEntities;
 import net.hydra.jojomod.entity.objects.ZipperEntity;
 import net.hydra.jojomod.entity.objects.ZipperStorageEntity;
+import net.hydra.jojomod.entity.projectile.StickyFingersFistEntity;
 import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.entity.stand.StickyFingersEntity;
 import net.hydra.jojomod.event.AbilityIconInstance;
 import net.hydra.jojomod.event.index.OffsetIndex;
+import net.hydra.jojomod.event.index.PacketDataIndex;
 import net.hydra.jojomod.event.index.PowerIndex;
 import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.index.SoundIndex;
@@ -17,7 +19,10 @@ import net.hydra.jojomod.sound.ModSounds;
 import net.hydra.jojomod.stand.powers.elements.PowerContext;
 import net.hydra.jojomod.stand.powers.presets.NewPunchingStand;
 import net.hydra.jojomod.util.MainUtil;
+import net.hydra.jojomod.util.S2CPacketUtil;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,6 +30,7 @@ import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -32,6 +38,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
@@ -46,6 +54,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PowersStickyFingers extends NewPunchingStand {
 
@@ -118,6 +127,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void powerActivate(PowerContext context) {
+        if (disassembleTicks > 0) cancelDisassembleClient();
         switch (context) {
             case SKILL_1_NORMAL -> {
                 unzipClient();
@@ -129,20 +139,18 @@ public class PowersStickyFingers extends NewPunchingStand {
                 storeClient();
             }
 
-            case SKILL_2_NORMAL -> {
-            }
-            case SKILL_2_CROUCH -> {
-            }
-            case SKILL_2_GUARD, SKILL_2_CROUCH_GUARD -> {
-            }
+            case SKILL_2_NORMAL -> primeFistClient();
+            case SKILL_2_CROUCH -> releaseZippersClient();
+            case SKILL_2_GUARD, SKILL_2_CROUCH_GUARD -> disassembleClient();
 
             case SKILL_3_NORMAL -> {
-                dashOrVaultClient();
+                if (hasLatchedFist()) grappleClient();
+                else dashOrVaultClient();
             }
             case SKILL_3_CROUCH -> {
+                dashOrVaultClient();
             }
-            case SKILL_3_GUARD, SKILL_3_CROUCH_GUARD -> {
-            }
+            case SKILL_3_GUARD, SKILL_3_CROUCH_GUARD -> toggleZipMarksClient();
 
             case SKILL_4_NORMAL -> {
                 guillotineClient();
@@ -163,8 +171,6 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final byte UNZIP = PowerIndex.POWER_1;
     public static final int UNZIP_COOLDOWN = 60;
     public static final double UNZIP_RANGE = 6.0D;
-
-    private ZipperEntity activeZipper = null;
 
     public void unzipClient() {
         if (!this.onCooldown(PowerIndex.SKILL_1)) {
@@ -192,12 +198,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         int feetY = Mth.floor(this.self.getY());
         int baseY = anchor.getY() < feetY ? anchor.getY() : Math.max(feetY, anchor.getY() - 1);
 
-        if (activeZipper != null && !activeZipper.isRemoved()) {
-            activeZipper.close();
-        }
         ZipperEntity zipper = ZipperEntity.create(level, this.self, anchor, face, baseY);
         level.addFreshEntity(zipper);
-        activeZipper = zipper;
 
         level.playSound(null, this.self.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.0F, 0.8F);
         level.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.6F);
@@ -220,7 +222,87 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final int TAG_DURATION = 600;
     public static final int TAG_MAX_LEVEL = 10;
 
+    public static final int ZIPPER_PART_HEAD = 1;
+    public static final int ZIPPER_PART_LEFT_ARM = 2;
+    public static final int ZIPPER_PART_RIGHT_ARM = 4;
+    public static final int ZIPPER_PART_LEFT_LEG = 8;
+    public static final int ZIPPER_PART_RIGHT_LEG = 16;
+    private static final int ZIPPER_PART_DURATION = 100;
+
+    private record ClientTagState(Level level, int zipperLevel, long expiresAt) {}
+    private record ClientDismembermentState(Level level, int partMask, long expiresAt) {}
+    private static final Map<Integer, ClientTagState> CLIENT_TAG_LEVELS = new ConcurrentHashMap<>();
+    private static final Map<Integer, ClientDismembermentState> CLIENT_DISMEMBERMENT = new ConcurrentHashMap<>();
+
     private final Map<UUID, long[]> tags = new HashMap<>();
+
+    public static void updateClientTagLevel(int entityId, int zipperLevel) {
+        Minecraft minecraft = Minecraft.getInstance();
+        Level level = minecraft.level;
+        if (level == null) return;
+        if (zipperLevel <= 0) {
+            CLIENT_TAG_LEVELS.remove(entityId);
+            return;
+        }
+        CLIENT_TAG_LEVELS.put(entityId,
+                new ClientTagState(level, zipperLevel, level.getGameTime() + TAG_DURATION));
+    }
+
+    public static int getClientTagLevel(Entity entity) {
+        ClientTagState state = CLIENT_TAG_LEVELS.get(entity.getId());
+        if (state == null) return 0;
+        if (state.level() != entity.level() || state.expiresAt() <= entity.level().getGameTime()) {
+            CLIENT_TAG_LEVELS.remove(entity.getId(), state);
+            return 0;
+        }
+        return state.zipperLevel();
+    }
+
+    public static void clearClientTagLevels() {
+        CLIENT_TAG_LEVELS.clear();
+    }
+
+    public static void updateClientDismemberment(int entityId, int part, int duration) {
+        Minecraft minecraft = Minecraft.getInstance();
+        Level level = minecraft.level;
+        if (level == null) return;
+        if (part == 0 || duration <= 0) {
+            CLIENT_DISMEMBERMENT.remove(entityId);
+            return;
+        }
+        CLIENT_DISMEMBERMENT.compute(entityId, (id, old) -> {
+            int mask = old != null && old.level() == level ? old.partMask() | part : part;
+            return new ClientDismembermentState(level, mask, level.getGameTime() + duration);
+        });
+    }
+
+    public static int getClientDismembermentMask(Entity entity) {
+        ClientDismembermentState state = CLIENT_DISMEMBERMENT.get(entity.getId());
+        if (state == null) return 0;
+        if (state.level() != entity.level() || state.expiresAt() <= entity.level().getGameTime()) {
+            CLIENT_DISMEMBERMENT.remove(entity.getId(), state);
+            return 0;
+        }
+        return state.partMask();
+    }
+
+    private void syncTagLevel(LivingEntity target, int zipperLevel) {
+        if (this.self instanceof ServerPlayer player) {
+            S2CPacketUtil.sendGenericIntIntToClientPacket(player, PacketDataIndex.S2C_ZIPPER_MARK,
+                    target.getId(), zipperLevel);
+        }
+    }
+
+    private void showDismemberedPart(LivingEntity target, int part) {
+        if (!(this.self.level() instanceof ServerLevel serverLevel)) return;
+        int packed = (ZIPPER_PART_DURATION << 8) | part;
+        for (ServerPlayer viewer : serverLevel.players()) {
+            if (viewer.distanceToSqr(target) <= 64.0D * 64.0D) {
+                S2CPacketUtil.sendGenericIntIntToClientPacket(viewer, PacketDataIndex.S2C_ZIPPER_DISMEMBERMENT,
+                        target.getId(), packed);
+            }
+        }
+    }
 
     public boolean isTagged(LivingEntity target) {
         long[] tag = tags.get(target.getUUID());
@@ -232,6 +314,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     }
 
     public void addTag(LivingEntity target) {
+        if (!areZipMarksEnabled() || target == this.self || target instanceof StandEntity) return;
         long[] tag = tags.computeIfAbsent(target.getUUID(), id -> new long[]{0L, 0L});
         long now = target.level().getGameTime();
         if (tag[1] <= now) {
@@ -239,6 +322,12 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         tag[0] = Math.min(TAG_MAX_LEVEL, tag[0] + 1);
         tag[1] = now + TAG_DURATION;
+        syncTagLevel(target, (int) tag[0]);
+    }
+
+    private void removeTag(LivingEntity target) {
+        tags.remove(target.getUUID());
+        syncTagLevel(target, 0);
     }
 
     @Override
@@ -249,6 +338,255 @@ public class PowersStickyFingers extends NewPunchingStand {
             addTag(living);
         }
         return hit;
+    }
+
+    // Sticky Fingers' launch-punch and zipper-release state.
+    // Keep these unique to Sticky Fingers: POWER_2 is already used by mass unzip above.
+    public static final byte ZIPPER_FIST = 90;
+    public static final byte ZIPPER_RELEASE = 91;
+    public static final byte ZIPPER_DISASSEMBLE = 92;
+    public static final byte ZIPPER_GRAPPLE = 93;
+    public static final byte ZIPPER_TOGGLE_MARKS = 97;
+    private static final byte ZIPPER_FIST_FIRE = 94;
+    private static final byte ZIPPER_FIST_CANCEL = 95;
+    private static final byte ZIPPER_DISASSEMBLE_CANCEL = 96;
+    private static final int FIST_COOLDOWN = 70;
+    private static final int RELEASE_COOLDOWN = 180;
+    private static final int DISASSEMBLE_COOLDOWN = 100;
+    private static final int GRAPPLE_COOLDOWN = 50;
+    private static final int MAX_RELEASE_WINDUP = 24;
+    private static final int FIST_PREPARE_ANIM_TICKS = 7;
+    private static final int FIST_IMPACT_ANIM_TICKS = 5;
+
+    private StickyFingersFistEntity latchedFist;
+    private int grappleTicks;
+    private int maxReleaseTicks;
+    private int maxReleaseTargetId = -1;
+    private int disassembleTicks;
+    private boolean wasInvulnerable;
+    private boolean wasInvisible;
+    private boolean fistPrimed;
+    private int fistPrimeTicks;
+    private int fistPrimeElapsedTicks;
+    private int fistImpactTicks;
+
+    public boolean areZipMarksEnabled() {
+        return this.self instanceof net.hydra.jojomod.event.powers.StandUser standUser
+                && standUser.roundabout$getUniqueStandModeToggle();
+    }
+
+    private void toggleZipMarksClient() {
+        if (!(this.self instanceof net.hydra.jojomod.event.powers.StandUser standUser)) return;
+        boolean enabled = !standUser.roundabout$getUniqueStandModeToggle();
+        standUser.roundabout$setUniqueStandModeToggle(enabled);
+        if (!enabled) clearClientTagLevels();
+        this.tryPowerPacket(ZIPPER_TOGGLE_MARKS);
+        message(enabled ? "roundabout.zipper_marks_on" : "roundabout.zipper_marks_off");
+    }
+
+    private void clearAllTags() {
+        for (UUID targetId : new ArrayList<>(tags.keySet())) {
+            Entity entity = this.self.level() instanceof ServerLevel serverLevel
+                    ? serverLevel.getEntity(targetId) : null;
+            if (entity instanceof LivingEntity target) syncTagLevel(target, 0);
+        }
+        tags.clear();
+    }
+
+    public void primeFistClient() {
+        if (!onCooldown(PowerIndex.SKILL_2)) {
+            fistPrimed = true;
+            fistPrimeTicks = 80;
+            fistPrimeElapsedTicks = 0;
+            tryPower(ZIPPER_FIST, true);
+            tryPowerPacket(ZIPPER_FIST);
+        }
+    }
+
+    private void firePrimedFistClient() {
+        if (!fistPrimed) return;
+        fistPrimed = false;
+        fistPrimeTicks = 0;
+        fistPrimeElapsedTicks = 0;
+        tryPower(ZIPPER_FIST_FIRE, true);
+        tryPowerPacket(ZIPPER_FIST_FIRE);
+    }
+
+    private void cancelPrimedFistClient() {
+        if (!fistPrimed) return;
+        fistPrimed = false;
+        fistPrimeTicks = 0;
+        fistPrimeElapsedTicks = 0;
+        tryPower(ZIPPER_FIST_CANCEL, true);
+        tryPowerPacket(ZIPPER_FIST_CANCEL);
+    }
+
+    @Override
+    public void buttonInputAttack(boolean keyIsDown, Options options) {
+        if (keyIsDown && disassembleTicks > 0) {
+            cancelDisassembleClient();
+            return;
+        }
+        if (keyIsDown && fistPrimed) {
+            firePrimedFistClient();
+            return;
+        }
+        super.buttonInputAttack(keyIsDown, options);
+    }
+
+    @Override
+    public void buttonInputUse(boolean keyIsDown, Options options) {
+        if (keyIsDown && disassembleTicks > 0) {
+            cancelDisassembleClient();
+            return;
+        }
+        if (keyIsDown && fistPrimed) {
+            cancelPrimedFistClient();
+            return;
+        }
+        super.buttonInputUse(keyIsDown, options);
+    }
+
+    private void primeFist() {
+        this.fistPrimed = true;
+        this.fistPrimeTicks = 80;
+        this.fistPrimeElapsedTicks = 0;
+        this.setActivePower(ZIPPER_FIST);
+        this.poseStand(OffsetIndex.ATTACK);
+        this.animateStand(StickyFingersEntity.ZIPPER_FIST_PREPARE);
+    }
+
+    public void releaseZippersClient() {
+        if (!onCooldown(PowerIndex.SKILL_2_SNEAK)) {
+            tryPower(ZIPPER_RELEASE, true);
+            tryPowerPacket(ZIPPER_RELEASE);
+        }
+    }
+
+    public void disassembleClient() {
+        if (!onCooldown(PowerIndex.SKILL_2_GUARD)) {
+            wasInvulnerable = this.self.isInvulnerable();
+            wasInvisible = this.self.isInvisible();
+            this.self.setInvulnerable(true);
+            this.self.setInvisible(true);
+            disassembleTicks = 14;
+            tryPower(ZIPPER_DISASSEMBLE, true);
+            tryPowerPacket(ZIPPER_DISASSEMBLE);
+        }
+    }
+
+    private void cancelDisassembleClient() {
+        endDisassemble();
+        tryPower(ZIPPER_DISASSEMBLE_CANCEL, true);
+        tryPowerPacket(ZIPPER_DISASSEMBLE_CANCEL);
+    }
+
+    public void grappleClient() {
+        if (!onCooldown(PowerIndex.SKILL_3)) {
+            tryPower(ZIPPER_GRAPPLE, true);
+            tryPowerPacket(ZIPPER_GRAPPLE);
+        }
+    }
+
+    private void launchFist() {
+        this.setCooldown(PowerIndex.SKILL_2, FIST_COOLDOWN);
+        this.fistPrimeElapsedTicks = 0;
+        this.fistImpactTicks = FIST_IMPACT_ANIM_TICKS;
+        this.poseStand(OffsetIndex.ATTACK);
+        this.animateStand(StickyFingersEntity.ZIPPER_FIST_IMPACT);
+        if (this.self.level().isClientSide()) return;
+
+        StickyFingersFistEntity fist = new StickyFingersFistEntity(this.self, this.self.level());
+        Vec3 look = this.self.getLookAngle().normalize();
+        fist.setPos(this.self.getX() + look.x * 0.7D,
+                this.self.getEyeY() - 0.25D + look.y * 0.7D,
+                this.self.getZ() + look.z * 0.7D);
+        fist.setDeltaMovement(look.scale(2.35D).add(this.self.getDeltaMovement().scale(0.25D)));
+        fist.setNoGravity(true);
+        this.self.level().addFreshEntity(fist);
+        this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.PISTON_EXTEND,
+                SoundSource.PLAYERS, 0.9F, 1.25F);
+    }
+
+    public void setLatchedFist(StickyFingersFistEntity fist) {
+        this.latchedFist = fist;
+    }
+
+    private boolean hasLatchedFist() {
+        return latchedFist != null && !latchedFist.isRemoved() && latchedFist.isLatched();
+    }
+
+    private void startGrapple() {
+        this.setCooldown(PowerIndex.SKILL_3, GRAPPLE_COOLDOWN);
+        if (this.self.level().isClientSide() || latchedFist == null || latchedFist.isRemoved()
+                || !latchedFist.isLatched()) return;
+        this.grappleTicks = 50;
+        this.setActivePower(ZIPPER_GRAPPLE);
+    }
+
+    private void startZipperRelease() {
+        this.setCooldown(PowerIndex.SKILL_2_SNEAK, RELEASE_COOLDOWN);
+        if (this.self.level().isClientSide()) return;
+
+        Entity hit = MainUtil.rayCastEntity(this.self, 8.0F);
+        if (!(hit instanceof LivingEntity target) || target instanceof StandEntity || !isTagged(target)) {
+            message("roundabout.zipper.not_tagged");
+            return;
+        }
+
+        int level = getTagLevel(target);
+        if (level >= TAG_MAX_LEVEL) {
+            maxReleaseTargetId = target.getId();
+            maxReleaseTicks = MAX_RELEASE_WINDUP;
+            target.addEffect(new MobEffectInstance(MobEffects.GLOWING, MAX_RELEASE_WINDUP, 0, false, true));
+            this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                    SoundSource.PLAYERS, 1.2F, 0.55F);
+            return;
+        }
+
+        releaseZippersOn(target, level);
+    }
+
+    private void releaseZippersOn(LivingEntity target, int level) {
+        if (!target.isAlive()) return;
+        float damage = 4.0F + level * 1.65F;
+        if (StandDamageEntityAttack(target, damage, 0.25F, this.self)) {
+            int duration = 30 + level * 12;
+            target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration,
+                    level >= 6 ? 2 : 1, false, true));
+            target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, duration, level >= 6 ? 1 : 0,
+                    false, true));
+            if (this.self.level() instanceof ServerLevel serverLevel) {
+                serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
+                        target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                        14 + level * 2, 0.35D, 0.45D, 0.35D, 0.03D);
+            }
+        }
+        removeTag(target);
+        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
+                SoundSource.PLAYERS, 1.0F, 0.75F);
+    }
+
+    private void startDisassemble() {
+        this.setCooldown(PowerIndex.SKILL_2_GUARD, DISASSEMBLE_COOLDOWN);
+        if (disassembleTicks <= 0) {
+            this.wasInvulnerable = this.self.isInvulnerable();
+            this.wasInvisible = this.self.isInvisible();
+        }
+        this.self.setInvulnerable(true);
+        this.self.setInvisible(true);
+        this.disassembleTicks = 14;
+        if (this.self.level().isClientSide()) return;
+        if (this.self.level() instanceof ServerLevel serverLevel) {
+            BlockState state = serverLevel.getBlockState(this.self.blockPosition().below());
+            if (!state.isAir()) {
+                serverLevel.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, state),
+                        this.self.getX(), this.self.getY() + 0.8D, this.self.getZ(),
+                        28, 0.35D, 0.45D, 0.35D, 0.12D);
+            }
+        }
+        this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_LEATHER,
+                SoundSource.PLAYERS, 1.0F, 0.55F);
     }
 
     public static final byte MASS_UNZIP = PowerIndex.POWER_2;
@@ -423,7 +761,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         ZipperStorageEntity zipper = ZipperStorageEntity.createForMob(level, this.self, mob, stuffed);
         level.addFreshEntity(zipper);
         zipper.mountOn(mob);
-        tags.remove(mob.getUUID());
+        removeTag(mob);
         level.playSound(null, mob.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 1.2F);
         if (level instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, mob.getX(), mob.getY() + mob.getBbHeight() / 2,
@@ -458,8 +796,48 @@ public class PowersStickyFingers extends NewPunchingStand {
             startStore();
         } else if (move == ZIPPER_GUILLOTINE) {
             startGuillotine();
+        } else if (move == ZIPPER_FIST) {
+            primeFist();
+        } else if (move == ZIPPER_FIST_FIRE) {
+            if (fistPrimed) {
+                fistPrimed = false;
+                fistPrimeTicks = 0;
+                launchFist();
+            }
+            this.setPowerNone();
+        } else if (move == ZIPPER_FIST_CANCEL) {
+            fistPrimed = false;
+            fistPrimeTicks = 0;
+            fistPrimeElapsedTicks = 0;
+            if (getAnimation() == StickyFingersEntity.ZIPPER_FIST_PREPARE
+                    || getAnimation() == StickyFingersEntity.ZIPPER_FIST_IDLE) {
+                this.animateStand(StandEntity.IDLE);
+                this.poseStand(OffsetIndex.FOLLOW);
+            }
+            this.setPowerNone();
+        } else if (move == ZIPPER_RELEASE) {
+            startZipperRelease();
+        } else if (move == ZIPPER_DISASSEMBLE) {
+            startDisassemble();
+        } else if (move == ZIPPER_DISASSEMBLE_CANCEL) {
+            endDisassemble();
+        } else if (move == ZIPPER_GRAPPLE) {
+            startGrapple();
+        } else if (move == ZIPPER_TOGGLE_MARKS) {
+            if (this.self instanceof net.hydra.jojomod.event.powers.StandUser standUser) {
+                boolean enabled = !standUser.roundabout$getUniqueStandModeToggle();
+                standUser.roundabout$setUniqueStandModeToggle(enabled);
+                if (!enabled) clearAllTags();
+            }
         }
         return super.setPowerOther(move, lastMove);
+    }
+
+    private void endDisassemble() {
+        if (disassembleTicks <= 0) return;
+        disassembleTicks = 0;
+        this.self.setInvulnerable(wasInvulnerable);
+        this.self.setInvisible(wasInvisible);
     }
 
     private void startGuillotine() {
@@ -511,6 +889,87 @@ public class PowersStickyFingers extends NewPunchingStand {
     @Override
     public void tickPower() {
         super.tickPower();
+        if (fistPrimed && fistPrimeTicks > 0) {
+            fistPrimeTicks--;
+            fistPrimeElapsedTicks++;
+            if (fistPrimeElapsedTicks >= FIST_PREPARE_ANIM_TICKS
+                    && getAnimation() == StickyFingersEntity.ZIPPER_FIST_PREPARE) {
+                this.animateStand(StickyFingersEntity.ZIPPER_FIST_IDLE);
+            }
+            if (fistPrimeTicks <= 0) {
+                fistPrimed = false;
+                fistPrimeElapsedTicks = 0;
+                if (getAnimation() == StickyFingersEntity.ZIPPER_FIST_PREPARE
+                        || getAnimation() == StickyFingersEntity.ZIPPER_FIST_IDLE) {
+                    this.animateStand(StandEntity.IDLE);
+                    this.poseStand(OffsetIndex.FOLLOW);
+                }
+                this.setPowerNone();
+            }
+        }
+        if (fistImpactTicks > 0 && --fistImpactTicks <= 0
+                && getAnimation() == StickyFingersEntity.ZIPPER_FIST_IMPACT) {
+            this.animateStand(StandEntity.IDLE);
+            this.poseStand(OffsetIndex.FOLLOW);
+        }
+        if (!this.self.level().isClientSide()) {
+            if (grappleTicks > 0) {
+                if (this.self.hurtTime > 0 || latchedFist == null || latchedFist.isRemoved()
+                        || !latchedFist.isLatched()) {
+                    grappleTicks = 0;
+                    this.setPowerNone();
+                } else {
+                    Vec3 toFist = latchedFist.position().subtract(this.self.position());
+                    if (toFist.lengthSqr() < 1.4D) {
+                        grappleTicks = 0;
+                        this.setPowerNone();
+                    } else {
+                        Vec3 pull = toFist.normalize().scale(0.42D);
+                        this.self.setDeltaMovement(pull);
+                        this.self.hurtMarked = true;
+                        grappleTicks--;
+                    }
+                }
+            }
+            if (maxReleaseTicks > 0) {
+                Entity candidate = this.self.level().getEntity(maxReleaseTargetId);
+                if (!(candidate instanceof LivingEntity target) || !target.isAlive()
+                        || target.distanceTo(this.self) > 12.0F) {
+                    maxReleaseTicks = 0;
+                    maxReleaseTargetId = -1;
+                } else if (--maxReleaseTicks <= 0) {
+                    float finisherDamage = Math.max(26.0F, getHeavyPunchStrength(target) * 4.5F);
+                    StandDamageEntityAttack(target, finisherDamage, 0.0F, this.self);
+                    removeTag(target);
+                    if (this.self.level() instanceof ServerLevel serverLevel) {
+                        serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
+                                target.getX(), target.getY() + target.getBbHeight() * 0.5D,
+                                target.getZ(), 48, 0.65D, 0.8D, 0.65D, 0.08D);
+                    }
+                    this.self.level().playSound(null, target.blockPosition(), SoundEvents.IRON_TRAPDOOR_CLOSE,
+                            SoundSource.PLAYERS, 1.5F, 0.5F);
+                    maxReleaseTargetId = -1;
+                } else if (maxReleaseTicks % 4 == 0) {
+                    int openedPartIndex = (MAX_RELEASE_WINDUP - maxReleaseTicks) / 4 - 1;
+                    int[] zipperParts = { ZIPPER_PART_RIGHT_ARM, ZIPPER_PART_LEFT_ARM,
+                            ZIPPER_PART_RIGHT_LEG, ZIPPER_PART_LEFT_LEG, ZIPPER_PART_HEAD };
+                    if (openedPartIndex >= 0 && openedPartIndex < zipperParts.length) {
+                        showDismemberedPart(target, zipperParts[openedPartIndex]);
+                    }
+                    StandDamageEntityAttack(target, 2.0F, 0.0F, this.self);
+                    if (this.self.level() instanceof ServerLevel serverLevel) {
+                        serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
+                                target.getX(), target.getY() + target.getBbHeight() * 0.5D,
+                                target.getZ(), 10, 0.35D, 0.45D, 0.35D, 0.04D);
+                        serverLevel.sendParticles(ParticleTypes.CRIT,
+                                target.getX(), target.getY() + target.getBbHeight() * 0.5D,
+                                target.getZ(), 5, 0.25D, 0.35D, 0.25D, 0.08D);
+                    }
+                    target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 24, 0, false, true));
+                }
+            }
+        }
+        if (disassembleTicks > 0 && --disassembleTicks <= 0) endDisassemble();
         if (!this.self.level().isClientSide() && barrageTimer > 0) {
             tickBarrageAnimation();
         }
@@ -542,7 +1001,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (guarding) {
             setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2_GUARD);
         } else if (sneaking) {
-            setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2_SNEAK);
+            setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_2_SNEAK);
         } else {
             setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_2);
         }
@@ -550,11 +1009,9 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (guarding) {
             setSkillIcon(context, x, y, 3, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_3_GUARD);
         } else if (sneaking) {
-            setSkillIcon(context, x, y, 3, StandIcons.WALL_WALK, PowerIndex.NO_CD);
-        } else if (canVault()) {
-            setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_VAULT, PowerIndex.GLOBAL_DASH);
-        } else {
             setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.GLOBAL_DASH);
+        } else {
+            setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_3);
         }
 
         if (sneaking && !guarding) {
@@ -592,16 +1049,18 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c3, r0, 0, "ability.roundabout.zipper_fist",
                 "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r1, 0, "ability.roundabout.zipper_release",
-                "instruction.roundabout.press_skill_crouch", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
+                "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_MASS, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r2, 0, "ability.roundabout.zipper_disassemble",
                 "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
 
-        list.add(drawSingleGUIIcon(context, 18, c4, r0, 0, "ability.roundabout.dodge",
-                "instruction.roundabout.press_skill", StandIcons.DODGE, 3, level, bypass));
-        list.add(drawSingleGUIIcon(context, 18, c4, r1, 0, "ability.roundabout.zipper_ride",
-                "instruction.roundabout.press_skill_crouch", StandIcons.WALL_WALK, 3, level, bypass));
-        list.add(drawSingleGUIIcon(context, 18, c4, r2, 0, "ability.roundabout.zipper_hidden",
-                "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 3, level, bypass));
+        list.add(drawSingleGUIIcon(context, 18, c4, r0, 0, "ability.roundabout.zipper_ride",
+                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST, 3, level, bypass));
+        list.add(drawSingleGUIIcon(context, 18, c4, r1, 0, "ability.roundabout.dodge",
+                "instruction.roundabout.press_skill_crouch", StandIcons.DODGE, 3, level, bypass));
+        list.add(drawSingleGUIIcon(context, 18, c4, r2, 0, "ability.roundabout.zipper_toggle",
+                "instruction.roundabout.press_skill_block", areZipMarksEnabled()
+                        ? StandIcons.STICKY_FINGERS_ZIPPER_MASS : StandIcons.KING_CRIMSON_HANDS_ACTIVE,
+                3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c5, r0, 0, "ability.roundabout.vault_kc",
                 "instruction.roundabout.press_skill_air", StandIcons.STICKY_FINGERS_VAULT, 3, level, bypass));
 

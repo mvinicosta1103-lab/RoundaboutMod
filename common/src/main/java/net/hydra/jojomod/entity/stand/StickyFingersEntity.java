@@ -19,6 +19,9 @@ public class StickyFingersEntity extends FollowingStandEntity {
     public final AnimationState finalPunch2 = new AnimationState();
     public final AnimationState finalPunch3 = new AnimationState();
     public final AnimationState finalPunchWindup = new AnimationState();
+    public final AnimationState zipperFistPrepare = new AnimationState();
+    public final AnimationState zipperFistIdle = new AnimationState();
+    public final AnimationState zipperFistImpact = new AnimationState();
     public final AnimationState hideFists = new AnimationState();
     public final AnimationState impale = new AnimationState();
     public final AnimationState impale2 = new AnimationState();
@@ -36,6 +39,9 @@ public class StickyFingersEntity extends FollowingStandEntity {
             FINAL_1 = 82,
             FINAL_2 = 83,
             IMPALE_2 = 84,
+            ZIPPER_FIST_PREPARE = 88,
+            ZIPPER_FIST_IDLE = 89,
+            ZIPPER_FIST_IMPACT = 90,
             BLOOD_SPLASH_WINDUP = 50,
             BLOOD_SPLASH_THROW = 51;
     @Override
@@ -123,6 +129,21 @@ public class StickyFingersEntity extends FollowingStandEntity {
             this.finalPunch3.startIfStopped(this.tickCount);
         } else {
             this.finalPunch3.stop();
+        }
+        if (animation == ZIPPER_FIST_PREPARE) {
+            this.zipperFistPrepare.startIfStopped(this.tickCount);
+        } else {
+            this.zipperFistPrepare.stop();
+        }
+        if (animation == ZIPPER_FIST_IDLE) {
+            this.zipperFistIdle.startIfStopped(this.tickCount);
+        } else {
+            this.zipperFistIdle.stop();
+        }
+        if (animation == ZIPPER_FIST_IMPACT) {
+            this.zipperFistImpact.startIfStopped(this.tickCount);
+        } else {
+            this.zipperFistImpact.stop();
         }
     }
 

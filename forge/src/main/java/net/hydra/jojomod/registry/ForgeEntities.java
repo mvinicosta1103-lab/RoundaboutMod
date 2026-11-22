@@ -1043,6 +1043,12 @@ public class ForgeEntities {
                             clientTrackingRange(15).
                             build(new ResourceLocation(Roundabout.MOD_ID, "stand_fireball").toString())
             );
+    public static final RegistryObject<EntityType<StickyFingersFistEntity>> STICKY_FINGERS_FIST =
+            ENTITY_TYPES.register("sticky_fingers_fist", () ->
+                    EntityType.Builder.<StickyFingersFistEntity>of(StickyFingersFistEntity::new, MobCategory.MISC)
+                            .sized(0.45F, 0.45F).clientTrackingRange(10).updateInterval(1)
+                            .build(new ResourceLocation(Roundabout.MOD_ID, "sticky_fingers_fist").toString())
+            );
     public static final RegistryObject<EntityType<EvilAuraProjectile>> EVIL_AURA_PROJECTILE =
             ENTITY_TYPES.register("evil_aura_projectile", () ->
                     EntityType.Builder.<EvilAuraProjectile>of(EvilAuraProjectile::new, MobCategory.MISC).sized(1F, 1F).

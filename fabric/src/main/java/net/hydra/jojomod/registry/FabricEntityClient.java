@@ -174,6 +174,7 @@ public class FabricEntityClient {
         EntityRendererRegistry.register(FabricEntities.TOTEM_OF_DOOM, TotemOfDoomRenderer::new);
         EntityRendererRegistry.register(FabricEntities.CROSSFIRE_HURRICANE, CrossfireHurricaneRenderer::new);
         EntityRendererRegistry.register(FabricEntities.LIFE_TRACKER, LifeTrackerRenderer::new);
+        EntityRendererRegistry.register(FabricEntities.STICKY_FINGERS_FIST, StickyFingersFistRenderer::new);
         EntityRendererRegistry.register(FabricEntities.STAND_FIREBALL, StandFireballRenderer::new);
         EntityRendererRegistry.register(FabricEntities.PW_METEOR, PWMeteorRenderer::new);
         EntityRendererRegistry.register(FabricEntities.PW_BIG_METEOR, PWBigMeteorRenderer::new);

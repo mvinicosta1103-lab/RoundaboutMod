@@ -32,6 +32,8 @@ import net.hydra.jojomod.stand.powers.*;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -65,6 +67,9 @@ import javax.annotation.Nullable;
 @Mixin(LivingEntityRenderer.class)
 public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends EntityModel<T>> extends EntityRenderer<T> implements RenderLayerParent<T, M>, ILivingEntityRenderer {
 
+    @Unique private ModelPart[] roundabout$zipperParts;
+    @Unique private boolean[] roundabout$zipperPartVisibility;
+
     @Shadow protected abstract boolean addLayer(RenderLayer<T, M> $$0);
     @Shadow protected M model;
     @Shadow public abstract void render(T $$0, float $$1, float $$2, PoseStack $$3, MultiBufferSource $$4, int $$5);
@@ -73,6 +78,45 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
 
     protected ZLivingEntityRenderer(EntityRendererProvider.Context $$0) {
         super($$0);
+    }
+
+    @Inject(method = "render(Lnet/minecraft/world/entity/LivingEntity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"))
+    private void roundabout$hideZipperedParts(T entity, float yaw, float partialTicks, PoseStack poseStack,
+                                              MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
+        roundabout$restoreZipperParts();
+        int mask = PowersStickyFingers.getClientDismembermentMask(entity);
+        if (mask == 0 || !(this.model instanceof HumanoidModel<?> humanoid)) return;
+        this.roundabout$zipperParts = new ModelPart[]{humanoid.head, humanoid.hat, humanoid.rightArm,
+                humanoid.leftArm, humanoid.rightLeg, humanoid.leftLeg};
+        this.roundabout$zipperPartVisibility = new boolean[this.roundabout$zipperParts.length];
+        for (int i = 0; i < this.roundabout$zipperParts.length; i++) {
+            ModelPart part = this.roundabout$zipperParts[i];
+            this.roundabout$zipperPartVisibility[i] = part.visible;
+        }
+        if ((mask & PowersStickyFingers.ZIPPER_PART_HEAD) != 0) {
+            humanoid.head.visible = false;
+            humanoid.hat.visible = false;
+        }
+        if ((mask & PowersStickyFingers.ZIPPER_PART_RIGHT_ARM) != 0) humanoid.rightArm.visible = false;
+        if ((mask & PowersStickyFingers.ZIPPER_PART_LEFT_ARM) != 0) humanoid.leftArm.visible = false;
+        if ((mask & PowersStickyFingers.ZIPPER_PART_RIGHT_LEG) != 0) humanoid.rightLeg.visible = false;
+        if ((mask & PowersStickyFingers.ZIPPER_PART_LEFT_LEG) != 0) humanoid.leftLeg.visible = false;
+    }
+
+    @Inject(method = "render(Lnet/minecraft/world/entity/LivingEntity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("TAIL"))
+    private void roundabout$restoreZipperedParts(T entity, float yaw, float partialTicks, PoseStack poseStack,
+                                                 MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
+        roundabout$restoreZipperParts();
+    }
+
+    @Unique
+    private void roundabout$restoreZipperParts() {
+        if (this.roundabout$zipperParts == null || this.roundabout$zipperPartVisibility == null) return;
+        for (int i = 0; i < this.roundabout$zipperParts.length; i++) {
+            this.roundabout$zipperParts[i].visible = this.roundabout$zipperPartVisibility[i];
+        }
+        this.roundabout$zipperParts = null;
+        this.roundabout$zipperPartVisibility = null;
     }
 
     @Unique
@@ -158,6 +202,8 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
             instance.renderEffectIcons(entity, matrixStack, buffer);
         }
         LocalPlayer player = Minecraft.getInstance().player;
+
+        ZipperMarkRenderer.render(entity, matrixStack, buffer);
 
 
         if (player != null && ((StandUser)player).roundabout$getStandPowers() != null
@@ -257,6 +303,7 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
     private void roundabout$init(EntityRendererProvider.Context $$0, EntityModel $$1, float $$2, CallbackInfo ci) {
         this.addLayer(new BigBubbleLayer<>($$0, ((LivingEntityRenderer)(Object)this)));
         this.addLayer(new FrozenLayer<>($$0, ((LivingEntityRenderer)(Object)this)));
+        this.addLayer(new ZipperBodyOverlayLayer<>((LivingEntityRenderer<T, M>) (Object) this));
     }
 
     @Nullable

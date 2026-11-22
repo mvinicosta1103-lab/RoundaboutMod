@@ -1190,6 +1190,14 @@ public class FabricEntities {
                         EntityType.Builder.<StandFireballEntity>of(StandFireballEntity::new, MobCategory.MISC).
                                 sized(0.9F, 0.9F).clientTrackingRange(15).build(Roundabout.MOD_ID+":stand_fireball")
                 );
+        public static final EntityType<StickyFingersFistEntity> STICKY_FINGERS_FIST =
+                Registry.register(
+                        BuiltInRegistries.ENTITY_TYPE,
+                        new ResourceLocation(Roundabout.MOD_ID, "sticky_fingers_fist"),
+                        EntityType.Builder.<StickyFingersFistEntity>of(StickyFingersFistEntity::new, MobCategory.MISC)
+                                .sized(0.45F, 0.45F).clientTrackingRange(10).updateInterval(1)
+                                .build(Roundabout.MOD_ID + ":sticky_fingers_fist")
+                );
     public static final EntityType<PWMeteorEntity> PW_METEOR =
             Registry.register(
                     BuiltInRegistries.ENTITY_TYPE,
@@ -1711,6 +1719,7 @@ public class FabricEntities {
                 ModEntities.THROWN_WATER_BOTTLE = THROWN_WATER_BOTTLE;
                 ModEntities.CROSSFIRE_HURRICANE = CROSSFIRE_HURRICANE;
                 ModEntities.LIFE_TRACKER = LIFE_TRACKER;
+                ModEntities.STICKY_FINGERS_FIST = STICKY_FINGERS_FIST;
                 ModEntities.SEPERATED_LEGS = SEPERATED_LEGS;
                 ModEntities.SEPERATED_ARM = SEPERATED_ARM;
                 ModEntities.SEPERATED_ARM_SLIM = SEPERATED_ARM_SLIM;

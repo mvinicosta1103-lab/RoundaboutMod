@@ -1,6 +1,7 @@
 package net.hydra.jojomod.client.models.stand;
 
 import net.hydra.jojomod.client.models.stand.animations.KingCrimsonAnimations;
+import net.hydra.jojomod.client.models.stand.animations.StickyFingersAnimations;
 import net.hydra.jojomod.client.models.stand.animations.StandAnimations;
 import net.hydra.jojomod.client.models.stand.animations.StarPlatinumAnimations;
 import net.hydra.jojomod.client.models.stand.animations.TheWorldAnimations;
@@ -112,6 +113,9 @@ public class StickyFingersModel<T extends StickyFingersEntity> extends StandMode
         this.animate(pEntity.finalPunch2, KingCrimsonAnimations.Chop_Attack, pAgeInTicks, 1.0f);
         this.animate(pEntity.finalPunch3, KingCrimsonAnimations.Chop_Charged, pAgeInTicks, 1.0f);
         this.animate(pEntity.impale2, StarPlatinumAnimations.Impale2, pAgeInTicks, 1.04f);
+        this.animate(pEntity.zipperFistPrepare, StickyFingersAnimations.LONG_PUNCH_PREPARE, pAgeInTicks, 1.0F);
+        this.animate(pEntity.zipperFistIdle, StickyFingersAnimations.LONG_PUNCH_IDLE_LOOP, pAgeInTicks, 1.0F);
+        this.animate(pEntity.zipperFistImpact, StickyFingersAnimations.LONG_PUNCH_IMPACT, pAgeInTicks, 1.0F);
 
         this.animate(pEntity.bloodSplashWindup, KingCrimsonAnimations.Chop_Start, pAgeInTicks, 1.5f);
         this.animate(pEntity.bloodSplashThrow, KingCrimsonAnimations.Chop_Attack, pAgeInTicks, 1.6f);
