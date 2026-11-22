@@ -4,6 +4,7 @@ import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.util.C2SPacketUtil;
 import net.minecraft.client.GameNarrator;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -26,60 +27,38 @@ public final class StickyFingersUnzipScreen extends Screen implements NoCancelIn
 
     public StickyFingersUnzipScreen() { super(GameNarrator.NO_TITLE); }
 
-    @Override protected void init() { }
+    @Override
+    protected void init() {
+        int centerX = width / 2;
+        int top = height / 2 - 30;
+        int buttonWidth = 122;
+        int gap = 6;
+        addPartButton(centerX - buttonWidth / 2, top - 2, buttonWidth, 20, 0);
+        addPartButton(centerX - buttonWidth - gap / 2, top + 24, buttonWidth, 20, 1);
+        addPartButton(centerX + gap / 2, top + 24, buttonWidth, 20, 2);
+        addPartButton(centerX - buttonWidth - gap / 2, top + 50, buttonWidth, 20, 3);
+        addPartButton(centerX + gap / 2, top + 50, buttonWidth, 20, 4);
+    }
+
+    private void addPartButton(int x, int y, int buttonWidth, int buttonHeight, int partIndex) {
+        addRenderableWidget(Button.builder(Component.translatable(LABELS[partIndex]), button -> {
+            C2SPacketUtil.tryIntPowerPacket(PowersStickyFingers.ZIPPER_UNZIP_PART, PARTS[partIndex]);
+            onClose();
+        }).bounds(x, y, buttonWidth, buttonHeight).build());
+    }
     @Override public boolean isPauseScreen() { return false; }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        g.fill(0, 0, width, height, 0xB9000713);
-        int panelW = 250, panelH = 172, x = (width - panelW) / 2, y = (height - panelH) / 2;
-        // Custom Sticky Fingers panel: dark blue plate, cyan inner edge, and gold zipper teeth.
-        g.fill(x - 3, y - 3, x + panelW + 3, y + panelH + 3, 0xFF07101D);
-        g.fill(x, y, x + panelW, y + panelH, 0xFF123A70);
-        g.fill(x + 3, y + 3, x + panelW - 3, y + panelH - 3, 0xFF08182C);
-        g.fill(x + 8, y + 8, x + panelW - 8, y + 33, 0xFF1458A0);
-        g.fill(x + 8, y + 32, x + panelW - 8, y + 34, 0xFFFFC83D);
-        // A central gold zipper rail frames the title, with teeth like the stand's zipper motif.
-        g.fill(x + 18, y + 42, x + 22, y + 136, 0xFFB88420);
-        for (int toothY = y + 44; toothY < y + 136; toothY += 8) {
-            g.fill(x + 13, toothY, x + 22, toothY + 3, 0xFFFFD65A);
-            g.fill(x + 22, toothY + 4, x + 29, toothY + 7, 0xFFFFD65A);
-        }
-        g.drawCenteredString(font, Component.translatable("gui.roundabout.sticky_fingers_unzip.title"), width / 2, y + 13, 0xFFFFFFFF);
-        g.drawCenteredString(font, Component.translatable("gui.roundabout.sticky_fingers_unzip.subtitle"), width / 2, y + 37, 0xFF8BE8FF);
-
-        int[][] positions = {{0, 0}, {-1, 1}, {1, 1}, {-1, 2}, {1, 2}};
-        int centerX = width / 2, baseY = y + 52;
-        for (int i = 0; i < PARTS.length; i++) {
-            int bx = centerX + positions[i][0] * 84 - 38;
-            int by = baseY + positions[i][1] * 32;
-            boolean hovered = mouseX >= bx && mouseX < bx + 76 && mouseY >= by && mouseY < by + 27;
-            int fill = hovered ? 0xFF246EAA : 0xFF102C4D;
-            g.fill(bx, by, bx + 76, by + 27, 0xFFFFC83D);
-            g.fill(bx + 2, by + 2, bx + 74, by + 25, fill);
-            g.fill(bx + 7, by + 5, bx + 10, by + 22, 0xFFFFD65A);
-            g.drawCenteredString(font, Component.translatable(LABELS[i]), bx + 42, by + 9, 0xFFFFFFFF);
-        }
-        g.drawCenteredString(font, Component.translatable("gui.roundabout.sticky_fingers_unzip.hint"), width / 2,
-                y + panelH - 14, 0xFFB7C8D8);
+        renderBackground(g);
+        int top = height / 2 - 61;
+        g.drawCenteredString(font, Component.translatable("gui.roundabout.sticky_fingers_unzip.title"),
+                width / 2, top, 0xFFFFFFFF);
+        g.drawCenteredString(font, Component.translatable("gui.roundabout.sticky_fingers_unzip.subtitle"),
+                width / 2, top + 16, 0xFFA0A0A0);
         super.render(g, mouseX, mouseY, partialTick);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
-        int panelH = 172, y = (height - panelH) / 2, baseY = y + 52;
-        int[][] positions = {{0, 0}, {-1, 1}, {1, 1}, {-1, 2}, {1, 2}};
-        for (int i = 0; i < PARTS.length; i++) {
-            int bx = width / 2 + positions[i][0] * 84 - 38;
-            int by = baseY + positions[i][1] * 32;
-            if (mouseX >= bx && mouseX < bx + 76 && mouseY >= by && mouseY < by + 27) {
-                C2SPacketUtil.tryIntPowerPacket(PowersStickyFingers.ZIPPER_UNZIP_PART, PARTS[i]);
-                onClose();
-                return true;
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
+        g.drawCenteredString(font, Component.translatable("gui.roundabout.sticky_fingers_unzip.hint"),
+                width / 2, height / 2 + 79, 0xFFA0A0A0);
     }
 
     @Override public void onClose() { minecraft.setScreen(null); }
