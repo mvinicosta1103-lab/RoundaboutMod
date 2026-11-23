@@ -5,4 +5,8 @@ public interface IStickyFingersDismemberment {
     int roundabout$getStickyFingersDismemberment();
 
     void roundabout$setStickyFingersDismemberment(int mask);
+
+    boolean roundabout$isInZipperDimension();
+
+    void roundabout$setInZipperDimension(boolean inside);
 }

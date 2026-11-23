@@ -10,6 +10,7 @@ import net.hydra.jojomod.event.ModParticles;
 import net.hydra.jojomod.event.powers.ModDamageTypes;
 import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.event.powers.StandUser;
+import net.hydra.jojomod.access.IStickyFingersDismemberment;
 import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.core.BlockPos;
@@ -73,7 +74,7 @@ public class ZipperEntity extends Entity {
     public static final int HIDE_TICKS = 160;
     public static final int TUNNEL_TICKS = 100;
     public static final int OPEN_ANIM_TICKS = 8;
-    /** Time for the zipper to retract after its opening window expires (20 ticks = 1 second). */
+    /** Zipper time before it retracts (20 ticks = 1 second) */
     public static final int CLOSE_ANIM_TICKS = 20;
 
     public static final int TUNNEL_DEPTH_WALL = 5;
@@ -116,6 +117,11 @@ public class ZipperEntity extends Entity {
     private float lastHealth = 0;
     private int lastFood = 0;
     private float lastSaturation = 0;
+    private boolean savedMayfly;
+    private boolean savedFlying;
+    private float savedFlyingSpeed = 0.05F;
+    private boolean savedAbilities;
+    private MobEffectInstance savedSpeedEffect;
 
     public ZipperEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -603,11 +609,7 @@ public class ZipperEntity extends Entity {
         if (this.level().isClientSide()) {
             return InteractionResult.SUCCESS;
         }
-        if (player.isShiftKeyDown()) {
-            releaseSwallowed();
-        } else {
-            startOpening(OPEN_ACTION_TUNNEL);
-        }
+        startHiding(player);
         return InteractionResult.CONSUME;
     }
 
@@ -646,10 +648,21 @@ public class ZipperEntity extends Entity {
         owner.teleportTo(hide.x, hide.y, hide.z);
         owner.setDeltaMovement(Vec3.ZERO);
         owner.hurtMarked = true;
-        int duration = HIDE_TICKS + 10;
-        owner.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, duration, 0, false, false, false));
-        owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 6, false, false, false));
-        owner.addEffect(new MobEffectInstance(MobEffects.JUMP, duration, 128, false, false, false));
+        owner.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 40, 0, false, false, false));
+        MobEffectInstance existingSpeed = owner.getEffect(MobEffects.MOVEMENT_SPEED);
+        savedSpeedEffect = existingSpeed == null ? null : new MobEffectInstance(existingSpeed);
+        owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 1, false, false, false));
+        if (!level().isClientSide() && owner instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            var abilities = serverPlayer.getAbilities();
+            savedMayfly = abilities.mayfly;
+            savedFlying = abilities.flying;
+            savedFlyingSpeed = abilities.getFlyingSpeed();
+            savedAbilities = true;
+            abilities.mayfly = false;
+            abilities.flying = false;
+            serverPlayer.onUpdateAbilities();
+        }
+        if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(true);
         lastHealth = owner.getHealth();
         lastFood = owner.getFoodData().getFoodLevel();
         lastSaturation = owner.getFoodData().getSaturationLevel();
@@ -661,9 +674,15 @@ public class ZipperEntity extends Entity {
 
     private void tickHiding() {
         Player owner = getOwnerPlayer();
-        if (owner == null || !owner.isAlive() || stateTicks >= HIDE_TICKS) {
+        if (owner == null || !owner.isAlive()) {
             endHiding(owner);
             return;
+        }
+        if (!owner.hasEffect(MobEffects.INVISIBILITY) || owner.getEffect(MobEffects.INVISIBILITY).getDuration() < 10) {
+            owner.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 40, 0, false, false, false));
+        }
+        if (!owner.hasEffect(MobEffects.MOVEMENT_SPEED) || owner.getEffect(MobEffects.MOVEMENT_SPEED).getDuration() < 10) {
+            owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 1, false, false, false));
         }
         if (owner.getHealth() > lastHealth) {
             owner.setHealth(lastHealth);
@@ -693,11 +712,58 @@ public class ZipperEntity extends Entity {
 
     private void endHiding(Player owner) {
         if (owner != null) {
+            if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(false);
             owner.removeEffect(MobEffects.INVISIBILITY);
             owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             owner.removeEffect(MobEffects.JUMP);
+            owner.removeEffect(MobEffects.MOVEMENT_SPEED);
+            if (savedSpeedEffect != null) {
+                owner.addEffect(new MobEffectInstance(savedSpeedEffect));
+            }
+            if (savedAbilities && owner instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                var abilities = serverPlayer.getAbilities();
+                abilities.mayfly = savedMayfly;
+                abilities.flying = savedFlying && savedMayfly;
+                abilities.setFlyingSpeed(savedFlyingSpeed);
+                serverPlayer.onUpdateAbilities();
+            }
         }
+        savedAbilities = false;
+        savedSpeedEffect = null;
         close();
+    }
+
+    private void endHiding(Player owner, Vec3 exit) {
+        if (owner != null && exit != null) {
+            owner.teleportTo(exit.x, exit.y, exit.z);
+            owner.setDeltaMovement(Vec3.ZERO);
+            owner.hurtMarked = true;
+        }
+        endHiding(owner);
+    }
+
+    public static void exitOwnerFromZipperDimension(Player owner, Vec3 exit) {
+        if (!(owner.level() instanceof ServerLevel serverLevel)) return;
+        ZipperEntity hidingZipper = null;
+        for (Entity entity : serverLevel.getAllEntities()) {
+            if (entity instanceof ZipperEntity zipper && zipper.getState() == STATE_HIDING
+                    && owner.getUUID().equals(zipper.getOwnerUUID())) {
+                hidingZipper = zipper;
+                break;
+            }
+        }
+        if (hidingZipper != null) {
+            hidingZipper.endHiding(owner, exit);
+            return;
+        }
+        owner.teleportTo(exit.x, exit.y, exit.z);
+        owner.setDeltaMovement(Vec3.ZERO);
+        owner.hurtMarked = true;
+        if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(false);
+        owner.removeEffect(MobEffects.INVISIBILITY);
+        owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+        owner.removeEffect(MobEffects.JUMP);
+        owner.removeEffect(MobEffects.MOVEMENT_SPEED);
     }
 
     public static boolean canZip(Level level, BlockPos pos) {
@@ -707,6 +773,12 @@ public class ZipperEntity extends Entity {
                 && state.getDestroySpeed(level, pos) >= 0
                 && !state.hasBlockEntity()
                 && state.getFluidState().isEmpty();
+    }
+
+    /** Zippers can only be anchored to a sturdy, non-replaceable face, never to plants or flowers. */
+    public static boolean canZipOnFace(Level level, BlockPos pos, Direction face) {
+        BlockState state = level.getBlockState(pos);
+        return canZip(level, pos) && !state.canBeReplaced() && state.isFaceSturdy(level, pos, face);
     }
 
     public List<BlockPos> computeTunnel() {
@@ -890,7 +962,7 @@ public class ZipperEntity extends Entity {
             DamageSource entryDamage = getOwnerPlayer() != null
                     ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, getOwnerPlayer())
                     : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
-            living.hurt(entryDamage, getZipperDamage(marks));
+            living.hurt(entryDamage, PowersStickyFingers.applyZipModeDamage(getOwnerPlayer(), getZipperDamage(marks)));
         }
         if (target != null && target.isAlive() && swallowed.size() < MAX_SWALLOWED && swallowEntity(target)) {
             retainAfterClose = true;
@@ -1042,7 +1114,8 @@ public class ZipperEntity extends Entity {
                 DamageSource source = owner != null
                         ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, owner)
                         : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
-                living.hurt(source, getZipperDamage(flags.tagLevel()));
+                living.hurt(source, PowersStickyFingers.applyZipModeDamage(owner,
+                        getZipperDamage(flags.tagLevel())));
             }
             living.setInvulnerable(flags.invulnerable());
         }
@@ -1183,7 +1256,7 @@ public class ZipperEntity extends Entity {
             DamageSource source = owner != null
                     ? ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this, owner)
                     : ModDamageTypes.of(serverLevel, ModDamageTypes.STAND, this);
-            if (target.hurt(source, BITE_DAMAGE)) {
+            if (target.hurt(source, PowersStickyFingers.applyZipModeDamage(owner, BITE_DAMAGE))) {
                 if (owner instanceof StandUser standUser
                         && standUser.roundabout$getStandPowers() instanceof PowersStickyFingers powers) {
                     powers.addTag(target);

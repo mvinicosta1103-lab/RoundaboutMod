@@ -3,6 +3,7 @@ package net.hydra.jojomod.entity.objects;
 import net.hydra.jojomod.entity.ModEntities;
 import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.event.powers.ModDamageTypes;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
@@ -110,7 +111,7 @@ public class ZipperDebrisEntity extends Entity {
         DamageSource source = owner != null
                 ? ModDamageTypes.of(this.level(), ModDamageTypes.STAND, this, owner)
                 : ModDamageTypes.of(this.level(), ModDamageTypes.STAND, this);
-        target.hurt(source, damage);
+        target.hurt(source, PowersStickyFingers.applyZipModeDamage(owner, damage));
     }
 
     private void burst() {

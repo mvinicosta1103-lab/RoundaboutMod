@@ -27,6 +27,7 @@ import net.hydra.jojomod.item.StandArrowItem;
 import net.hydra.jojomod.item.StandDiscItem;
 import net.hydra.jojomod.sound.ModSounds;
 import net.hydra.jojomod.stand.powers.PowersAnubis;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -326,6 +327,10 @@ public abstract class ZMob extends LivingEntity implements IMob {
 
     @Inject(method = "doHurtTarget", at = @At(value = "HEAD"), cancellable = true)
     private void roundabout$TryAttack(Entity $$0, CallbackInfoReturnable<Boolean> ci) {
+            if (PowersStickyFingers.hasBothArmsRemoved((Mob) (Object) this)) {
+                ci.setReturnValue(false);
+                return;
+            }
             if (MainUtil.forceAggression(this)){
                 float $$1 = 1F;
                 if (roundabout$isVampire()){
@@ -370,6 +375,24 @@ public abstract class ZMob extends LivingEntity implements IMob {
 
                 ci.setReturnValue($$4);
             }
+    }
+
+    @Inject(method = "pickUpItem(Lnet/minecraft/world/entity/item/ItemEntity;)V", at = @At("HEAD"), cancellable = true, require = 0)
+    private void roundabout$preventPickupWithoutArms(net.minecraft.world.entity.item.ItemEntity item,
+                                                     CallbackInfo ci) {
+        if (PowersStickyFingers.hasBothArmsRemoved((Mob) (Object) this)) ci.cancel();
+    }
+
+    @Inject(method = "tick()V", at = @At("TAIL"), require = 0)
+    private void roundabout$disableMobWithoutLimbs(CallbackInfo ci) {
+        Mob mob = (Mob) (Object) this;
+        if (PowersStickyFingers.hasNoLimbs(mob)) {
+            mob.getNavigation().stop();
+            mob.setTarget(null);
+            mob.setAggressive(false);
+            net.minecraft.world.phys.Vec3 velocity = mob.getDeltaMovement();
+            mob.setDeltaMovement(0.0D, velocity.y, 0.0D);
+        }
     }
 
     @Inject(method = "finalizeSpawn", at = @At(value = "HEAD"))

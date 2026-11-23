@@ -2157,6 +2157,11 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
     @Inject(method = "interactOn(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", at=@At("HEAD"), cancellable = true)
     private void roundabout$interactOn(Entity $$0, InteractionHand $$1, CallbackInfoReturnable<InteractionResult> cir)
     {
+        if (PowersStickyFingers.isInZipperDimension((Player) (Object) this)
+                || PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
         if (!$$0.level().isClientSide()) {
             if (!this.isSpectator()) {
                 ItemStack $$2 = this.getItemInHand($$1);
@@ -2184,6 +2189,11 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
     @Inject(method = "attack", at=@At("HEAD"), cancellable = true)
     private void roundabout$attack(Entity $$0, CallbackInfo ci)
     {
+        if (PowersStickyFingers.isInZipperDimension((Player) (Object) this)
+                || PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) {
+            ci.cancel();
+            return;
+        }
         if (roundabout$getVoiceData() != null){
             if ($$0.isAttackable()) {
                 if (!$$0.skipAttackInteraction(this)) {
@@ -2191,6 +2201,12 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
                 }
             }
         }
+    }
+
+    @Inject(method = "take(Lnet/minecraft/world/entity/Entity;I)V", at = @At("HEAD"), cancellable = true, require = 0)
+    private void roundabout$preventPickupWithoutArms(Entity item, int count, CallbackInfo ci) {
+        if (PowersStickyFingers.isInZipperDimension((Player) (Object) this)
+                || PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) ci.cancel();
     }
 
     @Inject(

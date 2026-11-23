@@ -33,8 +33,9 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
 
     private static final int SEGMENTS = 16;
     private static final int DIMENSION_FRAME_COUNT = 29;
-    private static final int DIMENSION_FRAME_HEIGHT = 66;
-    private static final int DIMENSION_CONTENT_HEIGHT = 64;
+    // Each of the four atlas cells is a Minecraft-sized 16x16 pixel tile.
+    private static final int DIMENSION_FRAME_HEIGHT = 16;
+    private static final int DIMENSION_CONTENT_HEIGHT = 16;
     private static final float TOOTH_WIDTH = 0.06F;
 
     public ZipperRenderer(EntityRendererProvider.Context context) {

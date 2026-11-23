@@ -135,6 +135,9 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void powerActivate(PowerContext context) {
+        if (isInZipperDimension(this.self) && context != PowerContext.SKILL_1_NORMAL) {
+            return;
+        }
         if (disassembleTicks > 0) cancelDisassembleClient();
         switch (context) {
             case SKILL_1_NORMAL -> {
@@ -180,23 +183,30 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final byte UNZIP = PowerIndex.POWER_1;
     public static final int UNZIP_COOLDOWN = 60;
     public static final double UNZIP_RANGE = 6.0D;
+    private static final double ZIPPER_DIMENSION_EXIT_RANGE = 64.0D;
+
+    public static boolean isInZipperDimension(Entity entity) {
+        return entity instanceof IStickyFingersDismemberment state && state.roundabout$isInZipperDimension();
+    }
 
     public void unzipClient() {
-        if (!this.onCooldown(PowerIndex.SKILL_1)) {
+        if (isInZipperDimension(this.self) || !this.onCooldown(PowerIndex.SKILL_1)) {
             this.tryPower(UNZIP, true);
             tryPowerPacket(UNZIP);
         }
     }
 
     private void startUnzip() {
-        HitResult hit = this.self.pick(UNZIP_RANGE, 1.0F, false);
+        boolean insideZipperDimension = isInZipperDimension(this.self);
+        double range = insideZipperDimension ? ZIPPER_DIMENSION_EXIT_RANGE : UNZIP_RANGE;
+        HitResult hit = this.self.pick(range, 1.0F, false);
         Level level = this.self.level();
-        EntityHitResult entityHit = MainUtil.rayCastEntityHitResult(this.self, (float) UNZIP_RANGE);
+        EntityHitResult entityHit = MainUtil.rayCastEntityHitResult(this.self, (float) range);
         boolean entityIsInFrontOfBlock = entityHit != null
                 && (!(hit instanceof BlockHitResult blockHit)
                 || entityHit.getLocation().distanceToSqr(this.self.getEyePosition())
                 <= blockHit.getLocation().distanceToSqr(this.self.getEyePosition()));
-        if (entityIsInFrontOfBlock && entityHit.getEntity() instanceof LivingEntity target
+        if (!insideZipperDimension && entityIsInFrontOfBlock && entityHit.getEntity() instanceof LivingEntity target
                 && target != this.self && !(target instanceof StandEntity)) {
             this.setCooldown(PowerIndex.SKILL_1, UNZIP_COOLDOWN);
             if (!this.self.level().isClientSide()) unzipTarget(target);
@@ -206,6 +216,10 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) return;
         BlockPos anchor = blockHit.getBlockPos();
         Direction face = blockHit.getDirection();
+        if (!ZipperEntity.canZipOnFace(level, anchor, face)) {
+            message("roundabout.zipper.invalid_surface");
+            return;
+        }
         BlockPos front = anchor.relative(face);
         if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
             return;
@@ -230,13 +244,21 @@ public class PowersStickyFingers extends NewPunchingStand {
                         pos.x, pos.y + 1.0D, pos.z, 16, 0.3D, 0.6D, 0.3D, 0.05D);
             }
         }
+        if (insideZipperDimension && this.self instanceof Player player) {
+            Vec3 exit = zipper.computeSurfacePos().add(face.getStepX() * 0.30D,
+                    face.getStepY() * 0.30D, face.getStepZ() * 0.30D);
+            if (face == Direction.DOWN) {
+                exit = exit.add(0.0D, -Math.max(0.0D, player.getBbHeight() - 0.30D), 0.0D);
+            }
+            ZipperEntity.exitOwnerFromZipperDimension(player, exit);
+        }
     }
 
     private void unzipTarget(LivingEntity target) {
         if (!target.isAlive() || target instanceof StandEntity) return;
         addTag(target);
         int level = Math.max(1, getTagLevel(target));
-        float damage = 2.0F + level * 2.0F;
+        float damage = applyZipModeDamage(this.self, 2.0F + level * 2.0F);
         if (target.hurt(ModDamageTypes.of(target.level(), ModDamageTypes.STAND, this.self), damage)) {
             applyDismembermentForLevel(target, level);
             target.knockback(0.25D, this.self.getX() - target.getX(), this.self.getZ() - target.getZ());
@@ -258,6 +280,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     public static final int TAG_DURATION = 600;
     public static final int TAG_MAX_LEVEL = 3;
+    private static final int BARRAGE_TAG_INTERVAL_TICKS = 8;
 
     public static final int ZIPPER_PART_HEAD = 1;
     public static final int ZIPPER_PART_LEFT_ARM = 2;
@@ -273,6 +296,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     private static final Map<Integer, ClientDismembermentState> CLIENT_DISMEMBERMENT = new ConcurrentHashMap<>();
 
     private final Map<UUID, long[]> tags = new HashMap<>();
+    private final Map<UUID, Long> barrageTagNextTick = new HashMap<>();
 
     public static void updateClientTagLevel(int entityId, int zipperLevel) {
         Minecraft minecraft = Minecraft.getInstance();
@@ -325,6 +349,22 @@ public class PowersStickyFingers extends NewPunchingStand {
             return 0;
         }
         return state.partMask();
+    }
+
+    public static boolean hasBothArmsRemoved(Entity entity) {
+        int arms = ZIPPER_PART_LEFT_ARM | ZIPPER_PART_RIGHT_ARM;
+        return (getClientDismembermentMask(entity) & arms) == arms;
+    }
+
+    public static boolean hasBothLegsRemoved(Entity entity) {
+        int legs = ZIPPER_PART_LEFT_LEG | ZIPPER_PART_RIGHT_LEG;
+        return (getClientDismembermentMask(entity) & legs) == legs;
+    }
+
+    public static boolean hasNoLimbs(Entity entity) {
+        int limbs = ZIPPER_PART_LEFT_ARM | ZIPPER_PART_RIGHT_ARM
+                | ZIPPER_PART_LEFT_LEG | ZIPPER_PART_RIGHT_LEG;
+        return (getClientDismembermentMask(entity) & limbs) == limbs;
     }
 
     private void syncTagLevel(LivingEntity target, int zipperLevel) {
@@ -397,19 +437,43 @@ public class PowersStickyFingers extends NewPunchingStand {
         syncTagLevel(target, (int) tag[0]);
     }
 
+    private void addBarrageTagGradually(LivingEntity target) {
+        long now = target.level().getGameTime();
+        long nextAllowedTick = barrageTagNextTick.getOrDefault(target.getUUID(), Long.MIN_VALUE);
+        if (now < nextAllowedTick) return;
+        addTag(target);
+        barrageTagNextTick.put(target.getUUID(), now + BARRAGE_TAG_INTERVAL_TICKS);
+    }
+
     private void removeTag(LivingEntity target) {
         tags.remove(target.getUUID());
+        barrageTagNextTick.remove(target.getUUID());
         syncTagLevel(target, 0);
     }
 
     @Override
     public boolean StandDamageEntityAttack(Entity target, float pow, float knockbackStrength, Entity attacker) {
-        boolean hit = super.StandDamageEntityAttack(target, pow, knockbackStrength, attacker);
+        boolean hit = super.StandDamageEntityAttack(target, applyZipModeDamage(attacker, pow), knockbackStrength, attacker);
         if (hit && attacker == this.self && target instanceof LivingEntity living && !(target instanceof StandEntity)
                 && !this.self.level().isClientSide()) {
             addTag(living);
         }
         return hit;
+    }
+
+    @Override
+    public boolean StandRushDamageEntityAttack(Entity target, float pow, float knockbackStrength, Entity attacker) {
+        if (attacker == this.self && areZipMarksEnabled() && target instanceof LivingEntity living) {
+            // Barrage damage bypasses StandDamageEntityAttack, so cap it here and keep it nonlethal.
+            float nonlethalChip = Math.max(0.0F, Math.min(0.05F, living.getHealth() - 0.01F));
+            boolean hit = super.StandRushDamageEntityAttack(target, nonlethalChip, knockbackStrength, attacker);
+            if (!this.self.level().isClientSide() && !(target instanceof StandEntity)) {
+                // Grow marks gradually during the barrage instead of reaching max level on its first few hits.
+                addBarrageTagGradually(living);
+            }
+            return hit;
+        }
+        return super.StandRushDamageEntityAttack(target, pow, knockbackStrength, attacker);
     }
 
     // Sticky Fingers' launch-punch and zipper-release state.
@@ -448,6 +512,15 @@ public class PowersStickyFingers extends NewPunchingStand {
                 && standUser.roundabout$getUniqueStandModeToggle();
     }
 
+    /** Zip Mode trades direct combat damage for faster zipper setup. */
+    public static float applyZipModeDamage(Entity attacker, float damage) {
+        if (attacker instanceof net.hydra.jojomod.event.powers.StandUser standUser
+                && standUser.roundabout$getUniqueStandModeToggle()) {
+            return damage * 0.10F;
+        }
+        return damage;
+    }
+
     private void toggleZipMarksClient() {
         if (!(this.self instanceof net.hydra.jojomod.event.powers.StandUser standUser)) return;
         boolean enabled = !standUser.roundabout$getUniqueStandModeToggle();
@@ -464,6 +537,7 @@ public class PowersStickyFingers extends NewPunchingStand {
             if (entity instanceof LivingEntity target) syncTagLevel(target, 0);
         }
         tags.clear();
+        barrageTagNextTick.clear();
     }
 
     public void primeFistClient() {
@@ -496,6 +570,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void buttonInputAttack(boolean keyIsDown, Options options) {
+        if (isInZipperDimension(this.self)) return;
         if (keyIsDown && disassembleTicks > 0) {
             cancelDisassembleClient();
             return;
@@ -509,6 +584,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void buttonInputUse(boolean keyIsDown, Options options) {
+        if (isInZipperDimension(this.self)) return;
         if (keyIsDown && disassembleTicks > 0) {
             cancelDisassembleClient();
             return;
@@ -682,7 +758,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     public static final byte MASS_UNZIP = PowerIndex.POWER_2;
     public static final int MASS_UNZIP_COOLDOWN = 200;
-    public static final int MASS_UNZIP_MAX_ZIPPERS = 25;
+    public static final int MASS_UNZIP_MAX_ZIPPERS = 50;
     public static final int MASS_UNZIP_BARRAGE_TICKS = 40;
 
     private int barrageTimer = 0;
@@ -698,15 +774,18 @@ public class PowersStickyFingers extends NewPunchingStand {
     private List<BlockPos> massUnzipArea(BlockPos anchor, Direction face) {
         List<BlockPos> area = new ArrayList<>();
         if (face.getAxis() == Direction.Axis.Y) {
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dz = -2; dz <= 2; dz++) {
-                    area.add(anchor.offset(dx, 0, dz));
+            for (int layer = 0; layer < 2; layer++) {
+                int yOffset = face == Direction.UP ? layer : -layer;
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) {
+                        area.add(anchor.offset(dx, yOffset, dz));
+                    }
                 }
             }
         } else {
             Direction along = face.getAxis() == Direction.Axis.X ? Direction.SOUTH : Direction.EAST;
-            for (int t = -2; t <= 2; t++) {
-                for (int dy = -1; dy <= 1; dy++) {
+            for (int dy = -1; dy <= 4; dy++) {
+                for (int t = -2; t <= 2; t++) {
                     area.add(anchor.relative(along, t).above(dy));
                 }
             }
@@ -720,7 +799,8 @@ public class PowersStickyFingers extends NewPunchingStand {
             return;
         }
         Level level = this.self.level();
-        this.setCooldown(PowerIndex.SKILL_1_SNEAK, MASS_UNZIP_COOLDOWN);
+        boolean zipMode = areZipMarksEnabled();
+        this.setCooldown(PowerIndex.SKILL_1_SNEAK, zipMode ? MASS_UNZIP_COOLDOWN / 2 : MASS_UNZIP_COOLDOWN);
         if (level.isClientSide()) {
             return;
         }
@@ -731,7 +811,7 @@ public class PowersStickyFingers extends NewPunchingStand {
             if (count >= MASS_UNZIP_MAX_ZIPPERS) {
                 break;
             }
-            if (!ZipperEntity.canZip(level, pos)) {
+            if (!ZipperEntity.canZipOnFace(level, pos, face)) {
                 continue;
             }
             BlockPos front = pos.relative(face);
@@ -743,7 +823,8 @@ public class PowersStickyFingers extends NewPunchingStand {
             float hardness = Math.max(0.0F, level.getBlockState(pos).getDestroySpeed(level, pos));
             int mineTicks = Mth.clamp(Math.round(hardness * 4.0F), 2, 30);
             ZipperEntity zipper = ZipperEntity.createMini(level, this.self, pos, face, pos.getY());
-            zipper.startMining(distance * 2 + level.random.nextInt(3), mineTicks);
+            int stagger = zipMode ? distance + level.random.nextInt(2) : distance * 2 + level.random.nextInt(3);
+            zipper.startMining(stagger, mineTicks);
             level.addFreshEntity(zipper);
             count++;
         }
@@ -816,7 +897,7 @@ public class PowersStickyFingers extends NewPunchingStand {
             return;
         }
         BlockPos pos = blockHit.getBlockPos();
-        if (!ZipperEntity.canZip(level, pos)) {
+        if (!ZipperEntity.canZipOnFace(level, pos, blockHit.getDirection())) {
             message("roundabout.zipper.cant_store");
             return;
         }

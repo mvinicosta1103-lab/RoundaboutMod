@@ -91,14 +91,16 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
         Entity owner = this.getOwner();
         if (target instanceof LivingEntity living && target != owner && !(target instanceof StandEntity)
                 && owner instanceof LivingEntity attacker) {
-            boolean damaged = living.hurt(this.damageSources().thrown(this, attacker), 6.0F);
+            boolean damaged = living.hurt(this.damageSources().thrown(this, attacker),
+                    PowersStickyFingers.applyZipModeDamage(attacker, 6.0F));
             if (damaged) {
                 if (attacker instanceof StandUser standUser
                         && standUser.roundabout$getStandPowers() instanceof PowersStickyFingers powers) {
                     powers.addTag(living);
                 }
-                Vec3 pull = attacker.position().subtract(living.position()).normalize().scale(0.55D);
-                living.push(pull.x, Math.max(0.12D, pull.y), pull.z);
+                // Stronger inward impulse makes the special pull variant feel distinct from a normal hit.
+                Vec3 pull = attacker.position().subtract(living.position()).normalize().scale(0.90D);
+                living.push(pull.x, Math.max(0.22D, pull.y), pull.z);
                 living.hurtMarked = true;
             }
         }

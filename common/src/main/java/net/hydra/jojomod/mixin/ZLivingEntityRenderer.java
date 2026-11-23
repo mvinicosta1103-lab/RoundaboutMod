@@ -97,8 +97,14 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
         int mask = PowersStickyFingers.getClientDismembermentMask(entity);
         int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
         if ((mask & legs) == legs) {
-            entity.setPose(Pose.SWIMMING);
-            entity.setSwimming(true);
+            if (entity instanceof Player) {
+                entity.setPose(Pose.SWIMMING);
+                entity.setSwimming(true);
+            } else {
+                // Most mob models ignore the swimming pose outside water; render their body pose ourselves.
+                entity.setPose(Pose.STANDING);
+                entity.setSwimming(false);
+            }
         } else if (!entity.isInWater() && entity.getPose() == Pose.SWIMMING && !entity.isFallFlying()) {
             entity.setSwimming(false);
             entity.setPose(Pose.STANDING);
@@ -382,6 +388,12 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
 //        if (roundabout$isRenderingYellowLines)
 //            return;
 
+        if (entity instanceof StandEntity stand && stand.getUser() != null
+                && PowersStickyFingers.isInZipperDimension(stand.getUser())) {
+            ci.cancel();
+            return;
+        }
+
         StandUser SU = (StandUser) entity;
         if ( SU.roundabout$isPossessed()  ) {
             PathfinderMob poss = SU.roundabout$getPossessor();
@@ -509,6 +521,13 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
             }else if (playerP == PlayerPosIndex.SKATE_TWIRL){
                 poseStack.mulPose(Axis.YP.rotationDegrees(((float)$$0.tickCount + $$4) * -45.0F));
             }
+        }
+        if (!($$0 instanceof Player) && PowersStickyFingers.hasBothLegsRemoved($$0)
+                && !$$0.isInWater() && !$$0.isPassenger() && !$$0.isFallFlying()) {
+            // Lay land based mobs on their side to produce a visible crawling pose even for custom models.
+            poseStack.translate(0.0D, 0.25D, 0.0D);
+            poseStack.mulPose(Axis.XP.rotationDegrees(-90.0F));
+            poseStack.translate(0.0D, -0.25D, 0.0D);
         }
     }
 

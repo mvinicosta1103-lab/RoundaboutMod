@@ -30,10 +30,12 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.AxeItem;
@@ -86,6 +88,12 @@ public class ZipperStorageEntity extends ZipperEntity {
         zipper.setPos(mob.getX(), mob.getY() + mob.getBbHeight() * 0.3D, mob.getZ());
         zipper.setState(STATE_STORAGE);
         return zipper;
+    }
+
+    @Override
+    public EntityDimensions getDimensions(net.minecraft.world.entity.Pose pose) {
+        EntityDimensions base = super.getDimensions(pose);
+        return EntityDimensions.scalable(base.width * 1.35F, base.height * 1.35F);
     }
 
     public void mountOn(LivingEntity mob) {
@@ -146,6 +154,11 @@ public class ZipperStorageEntity extends ZipperEntity {
     }
 
     @Override
+    public boolean canBeHitByProjectile() {
+        return !mobMode && !this.isRemoved() && getState() != STATE_CLOSING;
+    }
+
+    @Override
     public InteractionResult interact(Player player, InteractionHand hand) {
         if (mobMode || !isStickyFingersUser(player)) {
             return InteractionResult.PASS;
@@ -188,7 +201,7 @@ public class ZipperStorageEntity extends ZipperEntity {
         if (attacker == null) {
             attacker = source.getDirectEntity();
         }
-        if (attacker instanceof Player) {
+        if (attacker instanceof Player || source.getDirectEntity() instanceof Projectile) {
             sparks(this.position().add(0, 0.5D, 0), 12);
             this.level().playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.2F);
             this.discard();

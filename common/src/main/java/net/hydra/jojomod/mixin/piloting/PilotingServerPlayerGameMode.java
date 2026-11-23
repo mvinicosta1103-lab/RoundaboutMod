@@ -6,6 +6,7 @@ import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.event.powers.StandPowers;
 import net.hydra.jojomod.event.powers.StandUser;
 import net.hydra.jojomod.stand.powers.PowersJustice;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.stand.powers.PowersWhitesnake;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.advancements.CriteriaTriggers;
@@ -50,6 +51,12 @@ public abstract class PilotingServerPlayerGameMode {
     @Inject(method = "useItemOn(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;", at = @At(value = "HEAD"), cancellable = true)
     private void roundabout$useItemOn(ServerPlayer serverPlayer, Level level, ItemStack itemStack, InteractionHand interactionHand, BlockHitResult blockHitResult, CallbackInfoReturnable<InteractionResult> cir) {
 
+        if (PowersStickyFingers.isInZipperDimension(serverPlayer)
+                || PowersStickyFingers.hasBothArmsRemoved(serverPlayer)) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
         StandPowers powers = ((StandUser)serverPlayer).roundabout$getStandPowers();
         if (serverPlayer != null && powers.isPiloting() && powers.getPilotPlaceRange() != 0) {
             InteractionResult interactionResult2;
@@ -90,8 +97,23 @@ public abstract class PilotingServerPlayerGameMode {
             cir.setReturnValue(interactionResult2);
         }
     }
+    @Inject(method = "useItem(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", at = @At("HEAD"), cancellable = true, require = 0)
+    private void roundabout$useItemWithoutArms(ServerPlayer serverPlayer, Level level, ItemStack itemStack,
+                                               InteractionHand hand,
+                                               CallbackInfoReturnable<InteractionResult> cir) {
+        if (PowersStickyFingers.isInZipperDimension(serverPlayer)
+                || PowersStickyFingers.hasBothArmsRemoved(serverPlayer)) {
+            cir.setReturnValue(InteractionResult.FAIL);
+        }
+    }
+
     @Inject(method = "handleBlockBreakAction(Lnet/minecraft/core/BlockPos;Lnet/minecraft/network/protocol/game/ServerboundPlayerActionPacket$Action;Lnet/minecraft/core/Direction;II)V", at = @At(value = "HEAD"), cancellable = true)
     private void roundabout$handleBlockBreakActionM(BlockPos $$0, ServerboundPlayerActionPacket.Action $$1, Direction $$2, int $$3, int $$4, CallbackInfo ci) {
+        if (PowersStickyFingers.isInZipperDimension(this.player)
+                || PowersStickyFingers.hasBothArmsRemoved(this.player)) {
+            ci.cancel();
+            return;
+        }
         if (this.player != null) { StandUser standComp = ((StandUser) player);
             StandPowers powers = standComp.roundabout$getStandPowers();
             if (powers instanceof PowersWhitesnake) return;

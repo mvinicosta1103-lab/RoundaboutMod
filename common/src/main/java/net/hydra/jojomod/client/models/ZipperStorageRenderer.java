@@ -28,8 +28,9 @@ public class ZipperStorageRenderer extends EntityRenderer<ZipperStorageEntity> {
     private static final double VIEW_DISTANCE_SQR = 7.0D * 7.0D;
     private static final int SEGMENTS = 12;
     private static final int DIMENSION_FRAME_COUNT = 29;
-    private static final int DIMENSION_FRAME_HEIGHT = 66;
-    private static final int DIMENSION_CONTENT_HEIGHT = 64;
+    // Each of the four atlas cells is a Minecraft-sized 16x16 pixel tile.
+    private static final int DIMENSION_FRAME_HEIGHT = 16;
+    private static final int DIMENSION_CONTENT_HEIGHT = 16;
     private static final float TOOTH_WIDTH = 0.04F;
     private static final float LENGTH = 0.8F;
     private static final float HALF_WIDTH = 0.42F;

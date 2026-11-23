@@ -111,6 +111,11 @@ import static net.hydra.jojomod.util.MainUtil.sendParticlesIfPossible;
 
 @Mixin(value = LivingEntity.class, priority = 103)
 public abstract class StandUserEntity extends Entity implements StandUser, IStickyFingersDismemberment {
+
+    @Unique private boolean roundabout$zipperNoPhysicsApplied;
+    @Unique private boolean roundabout$previousNoPhysics;
+    @Unique private boolean roundabout$previousNoGravity;
+    @Unique private float roundabout$previousStepHeight;
     @Shadow
     public abstract ItemStack getItemInHand(InteractionHand $$0);
 
@@ -369,6 +374,9 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     private static final EntityDataAccessor<Integer> ROUNDABOUT$STICKY_DISMEMBERMENT =
             SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.INT);
+    @Unique
+    private static final EntityDataAccessor<Boolean> ROUNDABOUT$IN_ZIPPER_DIMENSION =
+            SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.BOOLEAN);
     @Unique
     private static final UUID ROUNDABOUT$STICKY_CRAWL_SPEED =
             UUID.fromString("6a14ab78-e61c-4d06-906e-cf09a54ec672");
@@ -2712,6 +2720,16 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
         ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$STICKY_DISMEMBERMENT, mask & 31);
     }
 
+    @Override
+    public boolean roundabout$isInZipperDimension() {
+        return ((LivingEntity) (Object) this).getEntityData().get(ROUNDABOUT$IN_ZIPPER_DIMENSION);
+    }
+
+    @Override
+    public void roundabout$setInZipperDimension(boolean inside) {
+        ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$IN_ZIPPER_DIMENSION, inside);
+    }
+
     @ModifyVariable(method = "travel(Lnet/minecraft/world/phys/Vec3;)V", at = @At("HEAD"), argsOnly = true)
     private Vec3 roundabout$stickyFingersCrawlMovement(Vec3 movement) {
         LivingEntity entity = (LivingEntity) (Object) this;
@@ -2740,6 +2758,29 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Inject(method = "tick()V", at = @At("TAIL"))
     private void roundabout$enforceStickyFingersDismemberment(CallbackInfo ci) {
         LivingEntity entity = (LivingEntity) (Object) this;
+        if (roundabout$isInZipperDimension()) {
+            if (!roundabout$zipperNoPhysicsApplied) {
+                roundabout$previousNoPhysics = this.noPhysics;
+                roundabout$previousNoGravity = this.isNoGravity();
+                roundabout$previousStepHeight = ((net.hydra.jojomod.mixin.access.AccessEntity) (Object) this)
+                        .roundabout$getMaxUpStep();
+                roundabout$zipperNoPhysicsApplied = true;
+            }
+            this.noPhysics = false;
+            this.setNoGravity(false);
+            ((net.hydra.jojomod.mixin.access.AccessEntity) (Object) this).roundabout$setMaxUpStep(1.5F);
+            if (entity instanceof Player && this.horizontalCollision
+                    && (Math.abs(this.xxa) + Math.abs(this.zza) > 0.01F)) {
+                Vec3 velocity = entity.getDeltaMovement();
+                entity.setDeltaMovement(velocity.x, Math.max(velocity.y, 0.22D), velocity.z);
+            }
+        } else if (roundabout$zipperNoPhysicsApplied) {
+            this.noPhysics = roundabout$previousNoPhysics;
+            this.setNoGravity(roundabout$previousNoGravity);
+            ((net.hydra.jojomod.mixin.access.AccessEntity) (Object) this)
+                    .roundabout$setMaxUpStep(roundabout$previousStepHeight);
+            roundabout$zipperNoPhysicsApplied = false;
+        }
         int mask = roundabout$getStickyFingersDismemberment();
         int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
         int arms = PowersStickyFingers.ZIPPER_PART_LEFT_ARM | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM;
@@ -2769,8 +2810,27 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
         }
 
         if (legless && armless) {
+            if (entity instanceof Mob mob) {
+                mob.getNavigation().stop();
+                mob.setAggressive(false);
+            }
             Vec3 velocity = entity.getDeltaMovement();
             entity.setDeltaMovement(0.0D, velocity.y, 0.0D);
+        }
+    }
+
+    @Inject(method = "hurt(Lnet/minecraft/world/damagesource/DamageSource;F)Z", at = @At("HEAD"),
+            cancellable = true, require = 0)
+    private void roundabout$denyAttacksWithoutArms(DamageSource source, float amount,
+                                                   CallbackInfoReturnable<Boolean> cir) {
+        if (roundabout$isInZipperDimension()) {
+            cir.setReturnValue(false);
+            return;
+        }
+        Entity attacker = source.getEntity();
+        if (attacker instanceof LivingEntity livingAttacker
+                && PowersStickyFingers.hasBothArmsRemoved(livingAttacker)) {
+            cir.setReturnValue(false);
         }
     }
 
@@ -3345,6 +3405,11 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     public void roundabout$tryPower(int move, boolean forced) {
 
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())
+                && (roundabout$getStandPowers() instanceof PowersStickyFingers
+                ? move != PowersStickyFingers.UNZIP && move != PowerIndex.NONE
+                : move != PowerIndex.NONE)) return;
+
         if (!this.roundabout$isClashing() || move == PowerIndex.CLASH_CANCEL) {
             this.roundabout$getStandPowers().tryPower(move, forced);
             rdbt$tryPowerStuff();
@@ -3354,6 +3419,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryIntPower(int move, boolean forced, int chargeTime) {
+
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
 
         if (!this.roundabout$isClashing() || move == PowerIndex.CLASH_CANCEL) {
             this.roundabout$getStandPowers().tryIntPower(move, forced, chargeTime);
@@ -3365,6 +3432,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Override
     public void roundabout$tryIntPower(int move, boolean forced, int chargeTime, int move2, int move3) {
 
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
+
         if (!this.roundabout$isClashing() || move == PowerIndex.CLASH_CANCEL) {
             this.roundabout$getStandPowers().tryTripleIntPower(move, forced, chargeTime, move2, move3);
             rdbt$tryPowerStuff();
@@ -3374,6 +3443,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryBlockPosPower(int move, boolean forced, BlockPos blockPos) {
+
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
 
         if (!this.roundabout$isClashing() || move == PowerIndex.CLASH_CANCEL) {
             this.roundabout$getStandPowers().tryBlockPosPower(move, forced, blockPos);
@@ -3386,6 +3457,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Override
     public void roundabout$tryPosPower(int move, boolean forced, Vec3 pos) {
 
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
+
         if (!this.roundabout$isClashing() || move == PowerIndex.CLASH_CANCEL) {
             this.roundabout$getStandPowers().tryPosPower(move, forced, pos);
             rdbt$tryPowerStuff();
@@ -3395,6 +3468,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryPowerF(int move, boolean forced) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IFatePlayer) pl).rdbt$getFatePowers().tryPower(move, forced);
             rdbt$tryPowerFateStuff();
@@ -3404,6 +3478,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryIntPowerF(int move, boolean forced, int chargeTime) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IFatePlayer) pl).rdbt$getFatePowers().tryIntPower(move, forced, chargeTime);
             rdbt$tryPowerFateStuff();
@@ -3414,6 +3489,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Override
     public void roundabout$tryIntPowerF(int move, boolean forced, int chargeTime, int move2, int move3) {
 
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
+
         if (rdbt$this() instanceof Player pl) {
             ((IFatePlayer) pl).rdbt$getFatePowers().tryTripleIntPower(move, forced, chargeTime, move2, move3);
             rdbt$tryPowerFateStuff();
@@ -3423,6 +3500,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryBlockPosPowerF(int move, boolean forced, BlockPos blockPos) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IFatePlayer) pl).rdbt$getFatePowers().tryBlockPosPower(move, forced, blockPos);
             rdbt$tryPowerFateStuff();
@@ -3432,6 +3510,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryPosPowerF(int move, boolean forced, Vec3 pos) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IFatePlayer) pl).rdbt$getFatePowers().tryPosPower(move, forced, pos);
             rdbt$tryPowerFateStuff();
@@ -3441,6 +3520,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryPowerP(int move, boolean forced) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IPowersPlayer) pl).rdbt$getPowers().tryPower(move, forced);
             rdbt$tryPowerPowerStuff();
@@ -3450,6 +3530,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryIntPowerP(int move, boolean forced, int chargeTime) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IPowersPlayer) pl).rdbt$getPowers().tryIntPower(move, forced, chargeTime);
             rdbt$tryPowerPowerStuff();
@@ -3460,6 +3541,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Override
     public void roundabout$tryIntPowerP(int move, boolean forced, int chargeTime, int move2, int move3) {
 
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
+
         if (rdbt$this() instanceof Player pl) {
             ((IPowersPlayer) pl).rdbt$getPowers().tryTripleIntPower(move, forced, chargeTime, move2, move3);
             rdbt$tryPowerPowerStuff();
@@ -3469,6 +3552,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryBlockPosPowerP(int move, boolean forced, BlockPos blockPos) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IPowersPlayer) pl).rdbt$getPowers().tryBlockPosPower(move, forced, blockPos);
             rdbt$tryPowerPowerStuff();
@@ -3478,6 +3562,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Unique
     @Override
     public void roundabout$tryPosPowerP(int move, boolean forced, Vec3 pos) {
+        if (PowersStickyFingers.isInZipperDimension(rdbt$this())) return;
         if (rdbt$this() instanceof Player pl) {
             ((IPowersPlayer) pl).rdbt$getPowers().tryPosPower(move, forced, pos);
             rdbt$tryPowerPowerStuff();
@@ -4117,6 +4202,7 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GRABBER_ID, 0);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GE_TREE_ROOT, false);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$STICKY_DISMEMBERMENT, 0);
+            ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$IN_ZIPPER_DIMENSION, false);
         }
     }
 
