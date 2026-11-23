@@ -1098,7 +1098,7 @@ public abstract class ZMob extends LivingEntity implements IMob {
 
             if (!((StandUser) this).roundabout$getStandDisc().isEmpty()) {
                 if (!this.roundabout$getFightOrFlight()) {
-                    if (!((StandUser) this).roundabout$getGrabbedSoul() && !(((StandUser) this).roundabout$getSealedTicks() > -1)) {
+                    if (((StandUser) this).roundabout$getGrabberSabbath() == 0 && !(((StandUser) this).roundabout$getSealedTicks() > -1)) {
                         if (this.getTarget() != null) {
                             if (this.getVehicle() != null && (this.getVehicle() instanceof Boat ||
                                     this.getVehicle() instanceof Minecart)) {
