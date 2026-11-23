@@ -23,7 +23,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Captures dismembered meshes once, then renders them at fixed world positions. */
 public final class ZipperDetachedLimbRenderer {
     private static final ResourceLocation ZIPPER_TEXTURE =
             new ResourceLocation("roundabout", "textures/entity/sticky_fingers/zipper_body_overlay_high.png");
@@ -56,12 +55,11 @@ public final class ZipperDetachedLimbRenderer {
             ModelPart detachedCopy = copyPart(part);
             entityLimbs.put(name, new DroppedLimb(level, entity.getUUID(), entity.getId(), name,
                     detachedCopy, skin, start, initialVelocity, entity.getYRot(),
-                    Math.floorMod(seed, 360), random.nextDouble() * 20.0D - 10.0D,
-                    random.nextDouble() * 20.0D - 10.0D, level.getGameTime()));
+                    Math.floorMod(seed, 360), (float) (random.nextDouble() * 20.0D - 10.0D),
+                    (float) (random.nextDouble() * 20.0D - 10.0D), level.getGameTime()));
         }
     }
 
-    /** Called by the common LevelRenderer mixin after terrain and entities have rendered. */
     public static void renderWorld(PoseStack poseStack, float partialTick, Camera camera,
                                    MultiBufferSource buffers, ClientLevel level) {
         if (level == null || DROPPED_LIMBS.isEmpty()) return;
@@ -157,8 +155,8 @@ public final class ZipperDetachedLimbRenderer {
                 if (velocity.y <= 0.0D && next.y <= floorTop) {
                     next = new Vec3(next.x, floorTop, next.z);
                     velocity = new Vec3(velocity.x * 0.58D, Math.abs(velocity.y) * 0.16D, velocity.z * 0.58D);
-                    limb.setPitch(limb.pitch() + velocity.x * 85.0F);
-                    limb.setRoll(limb.roll() - velocity.z * 85.0F);
+                    limb.setPitch(limb.pitch() + (float) (velocity.x * 85.0D));
+                    limb.setRoll(limb.roll() - (float) (velocity.z * 85.0D));
                     if (velocity.y < 0.035D && velocity.horizontalDistanceSqr() < 0.0025D) {
                         limb.setResting(true);
                         velocity = Vec3.ZERO;

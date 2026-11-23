@@ -49,7 +49,7 @@ public class ZipperStorageRenderer extends EntityRenderer<ZipperStorageEntity> {
     @Override
     public void render(ZipperStorageEntity entity, float yaw, float partialTicks, PoseStack poseStack,
                        MultiBufferSource buffer, int unusedLight) {
-        if (entity.getMergedRenderLeader() != entity) {
+        if (entity.isMobMode() || entity.getMergedRenderLeader() != entity) {
             return;
         }
         LocalPlayer player = Minecraft.getInstance().player;

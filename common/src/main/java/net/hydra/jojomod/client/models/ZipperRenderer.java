@@ -33,7 +33,7 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
 
     private static final int SEGMENTS = 16;
     private static final int DIMENSION_FRAME_COUNT = 29;
-    // Each of the four atlas cells is a Minecraft-sized 16x16 pixel tile.
+
     private static final int DIMENSION_FRAME_HEIGHT = 16;
     private static final int DIMENSION_CONTENT_HEIGHT = 16;
     private static final float TOOTH_WIDTH = 0.06F;
@@ -60,8 +60,7 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             return true;
         }
 
-        // The leader's own hitbox is tiny compared with the connected zipper path.
-        // Re-test visibility against the bounds of the whole rendered group.
+
         if (!entity.shouldRender(cameraX, cameraY, cameraZ)) {
             return false;
         }
@@ -96,7 +95,7 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             }
             case ZipperEntity.STATE_NEUTRAL -> open = 0.0F;
             case ZipperEntity.STATE_OPENING -> open = Mth.clamp(age / ZipperEntity.OPEN_ANIM_TICKS, 0.0F, 1.0F);
-            // Closing is animated segment by segment below, starting at the slider.
+
             case ZipperEntity.STATE_CLOSING -> open = 1.0F;
             case ZipperEntity.STATE_STORAGE -> open = 0.0F;
             default -> open = Mth.clamp(age / ZipperEntity.OPEN_ANIM_TICKS, 0.0F, 1.0F);
@@ -135,6 +134,17 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
                 super.render(entity, yaw, partialTicks, poseStack, buffer, light);
                 return;
             }
+        } else if (entity.getVehicle() == null) {
+            List<ZipperEntity.ZipperPathCell> path = entity.getMergedWallPath();
+            if (path.size() > 1) {
+                VertexConsumer pathConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
+                renderFloorPath(path, 0.40F, open,
+                        state == ZipperEntity.STATE_CLOSING ? age : -1.0F, dimensionFrame, light,
+                        poseStack, pathConsumer);
+                poseStack.popPose();
+                super.render(entity, yaw, partialTicks, poseStack, buffer, light);
+                return;
+            }
         }
         poseStack.mulPose(Axis.ZP.rotationDegrees(layout.rotationDegrees()));
         poseStack.translate(layout.centerX(), layout.centerY() - length / 2.0F, 0.0F);
@@ -143,7 +153,7 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         PoseStack.Pose pose = poseStack.last();
         Matrix4f matrix = pose.pose();
         Matrix3f normal = pose.normal();
-        // Keep the dimension video behind the zipper teeth in the same cutout pass.
+
         float dimensionZ = 0.005F;
         float teethZ = 0.02F;
         float sliderZ = 0.03F;

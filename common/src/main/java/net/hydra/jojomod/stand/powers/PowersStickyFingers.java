@@ -881,6 +881,14 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         Entity target = MainUtil.rayCastEntity(this.self, STORE_MOB_RANGE);
         if (target instanceof LivingEntity mob && !(target instanceof StandEntity)) {
+            ZipperStorageEntity existingStorage = level.getEntitiesOfClass(ZipperStorageEntity.class,
+                            mob.getBoundingBox().inflate(3.0D), zipper -> zipper.storesItemFor(mob))
+                    .stream().findFirst().orElse(null);
+            if (existingStorage != null && this.self instanceof Player player) {
+                existingStorage.returnMobItemTo(player, mob);
+                removeTag(mob);
+                return;
+            }
             if (isTagged(mob)) {
                 stuffMob(level, mob);
             } else {
@@ -932,8 +940,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         this.self.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
         ZipperStorageEntity zipper = ZipperStorageEntity.createForMob(level, this.self, mob, stuffed);
         level.addFreshEntity(zipper);
-        zipper.mountOn(mob);
-        removeTag(mob);
         level.playSound(null, mob.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 1.2F);
         if (level instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, mob.getX(), mob.getY() + mob.getBbHeight() / 2,

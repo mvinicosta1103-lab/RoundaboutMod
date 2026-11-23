@@ -63,7 +63,6 @@ public class ZipperStorageEntity extends ZipperEntity {
     private boolean mobMode = false;
     private UUID mobUUID = null;
     private int mobTicks = 0;
-    private boolean mounted = false;
 
     private float openAnim = 0.0F;
     private float prevOpenAnim = 0.0F;
@@ -96,16 +95,29 @@ public class ZipperStorageEntity extends ZipperEntity {
         return EntityDimensions.scalable(base.width * 1.35F, base.height * 1.35F);
     }
 
-    public void mountOn(LivingEntity mob) {
-        this.mounted = this.startRiding(mob, true);
-    }
-
     public boolean isMobMode() {
         return mobMode;
     }
 
     public UUID getMobUUID() {
         return mobUUID;
+    }
+
+    public boolean storesItemFor(LivingEntity mob) {
+        return mobMode && mobUUID != null && mobUUID.equals(mob.getUUID()) && !container.getItem(0).isEmpty();
+    }
+
+    public boolean returnMobItemTo(Player player, LivingEntity mob) {
+        if (this.level().isClientSide() || !storesItemFor(mob)) return false;
+        ItemStack returned = container.removeItemNoUpdate(0);
+        if (!player.getInventory().add(returned)) {
+            popStack(mob.position(), returned);
+        }
+        sparks(mob.position().add(0.0D, mob.getBbHeight() * 0.5D, 0.0D), 12);
+        this.level().playSound(null, mob.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                SoundSource.PLAYERS, 1.0F, 1.35F);
+        this.discard();
+        return true;
     }
 
     public static boolean isStickyFingersUser(Player player) {
@@ -252,9 +264,10 @@ public class ZipperStorageEntity extends ZipperEntity {
             this.discard();
             return;
         }
-        if (!mounted || this.getVehicle() != mob) {
-            this.setPos(mob.getX(), mob.getY() + mob.getBbHeight() * 0.3D, mob.getZ());
-        }
+        // Keep the visual marker in sync without riding the target; passengers can suppress
+        // normal player input and mob navigation on some entity types.
+        if (this.getVehicle() != null) this.stopRiding();
+        this.setPos(mob.getX(), mob.getY() + mob.getBbHeight() * 0.3D, mob.getZ());
         ItemStack stack = container.getItem(0);
         if (stack.isEmpty()) {
             finishMob(mob);
