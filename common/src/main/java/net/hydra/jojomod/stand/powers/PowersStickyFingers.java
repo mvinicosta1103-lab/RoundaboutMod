@@ -159,7 +159,8 @@ public class PowersStickyFingers extends NewPunchingStand {
                 else dashOrVaultClient();
             }
             case SKILL_3_CROUCH -> {
-                dashOrVaultClient();
+                if (this.self.onGround()) latchZipperClient();
+                else dashOrVaultClient();
             }
             case SKILL_3_GUARD, SKILL_3_CROUCH_GUARD -> toggleZipMarksClient();
 
@@ -482,6 +483,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final byte ZIPPER_RELEASE = 91;
     public static final byte ZIPPER_DISASSEMBLE = 92;
     public static final byte ZIPPER_GRAPPLE = 93;
+    public static final byte ZIPPER_LATCH = 98;
     public static final byte ZIPPER_TOGGLE_MARKS = 97;
     private static final byte ZIPPER_FIST_FIRE = 94;
     private static final byte ZIPPER_FIST_CANCEL = 95;
@@ -490,6 +492,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     private static final int RELEASE_COOLDOWN = 180;
     private static final int DISASSEMBLE_COOLDOWN = 100;
     private static final int GRAPPLE_COOLDOWN = 50;
+    private static final int LATCH_COOLDOWN = 100;
     private static final int MAX_RELEASE_WINDUP = 24;
     private static final int FIST_PREPARE_ANIM_TICKS = 7;
     private static final int FIST_IMPACT_ANIM_TICKS = 26;
@@ -650,6 +653,58 @@ public class PowersStickyFingers extends NewPunchingStand {
             tryPower(ZIPPER_GRAPPLE, true);
             tryPowerPacket(ZIPPER_GRAPPLE);
         }
+    }
+
+    public void latchZipperClient() {
+        if (!onCooldown(PowerIndex.SKILL_3)) {
+            tryPower(ZIPPER_LATCH, true);
+            tryPowerPacket(ZIPPER_LATCH);
+        }
+    }
+
+    private void startLatchZipper() {
+        if (this.self.level().isClientSide()) return;
+        HitResult hit = this.self.pick(UNZIP_RANGE, 1.0F, false);
+        if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
+            return;
+        }
+        Level level = this.self.level();
+        BlockPos anchor = blockHit.getBlockPos();
+        Direction face = blockHit.getDirection();
+        if (!ZipperEntity.canZipOnFace(level, anchor, face)) {
+            message("roundabout.zipper.invalid_surface");
+            return;
+        }
+        BlockPos front = anchor.relative(face);
+        if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
+            return;
+        }
+
+        int feetY = Mth.floor(this.self.getY());
+        int baseY = anchor.getY() < feetY ? anchor.getY() : Math.max(feetY, anchor.getY() - 1);
+        Vec3 look = this.self.getLookAngle().normalize();
+        Vec3 horizontalLook = new Vec3(look.x, 0.0D, look.z);
+        if (horizontalLook.lengthSqr() < 1.0E-4D) {
+            horizontalLook = new Vec3(-Mth.sin(this.self.getYRot() * Mth.DEG_TO_RAD), 0.0D,
+                    Mth.cos(this.self.getYRot() * Mth.DEG_TO_RAD));
+        }
+        Vec3 rideDirection;
+        if (face.getAxis() == Direction.Axis.Y) {
+            rideDirection = horizontalLook.normalize().scale(0.42D);
+        } else {
+            Vec3 normal = new Vec3(face.getStepX(), face.getStepY(), face.getStepZ());
+            Vec3 tangent = look.subtract(normal.scale(look.dot(normal)));
+            if (tangent.lengthSqr() < 1.0E-4D) {
+                tangent = new Vec3(0.0D, 1.0D, 0.0D);
+            }
+            rideDirection = tangent.normalize().scale(0.42D);
+        }
+
+        this.setCooldown(PowerIndex.SKILL_3, LATCH_COOLDOWN);
+        ZipperEntity zipper = ZipperEntity.createLatch(level, this.self, anchor, face, baseY, rideDirection);
+        level.addFreshEntity(zipper);
+        level.playSound(null, anchor, SoundEvents.ARMOR_EQUIP_CHAIN,
+                SoundSource.PLAYERS, 1.0F, 0.85F);
     }
 
     private void launchFist() {
@@ -1007,6 +1062,8 @@ public class PowersStickyFingers extends NewPunchingStand {
             endDisassemble();
         } else if (move == ZIPPER_GRAPPLE) {
             startGrapple();
+        } else if (move == ZIPPER_LATCH) {
+            startLatchZipper();
         } else if (move == ZIPPER_TOGGLE_MARKS) {
             if (this.self instanceof net.hydra.jojomod.event.powers.StandUser standUser) {
                 boolean enabled = !standUser.roundabout$getUniqueStandModeToggle();
@@ -1220,7 +1277,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (guarding) {
             setSkillIcon(context, x, y, 3, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_3_GUARD);
         } else if (sneaking) {
-            setSkillIcon(context, x, y, 3, StandIcons.DODGE, PowerIndex.GLOBAL_DASH);
+            setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_3);
         } else {
             setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_3);
         }

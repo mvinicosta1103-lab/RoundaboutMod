@@ -66,6 +66,10 @@ public class ZipperEntity extends Entity {
     public static final int STATE_STORAGE = 5;
     public static final int STATE_STORAGE_OPEN = 6;
     public static final int STATE_OPENING = 7;
+    public static final int STATE_LATCH_ARMING = 8;
+    public static final int STATE_LATCH_READY = 9;
+    public static final int STATE_LATCH_RIDING = 10;
+    public static final int STATE_LATCH_RETRACTING = 11;
 
     private static final int OPEN_ACTION_TUNNEL = 2;
     private static final int OPEN_ACTION_SWALLOW = 3;
@@ -76,6 +80,9 @@ public class ZipperEntity extends Entity {
     public static final int OPEN_ANIM_TICKS = 8;
     /** Zipper time before it retracts (20 ticks = 1 second) */
     public static final int CLOSE_ANIM_TICKS = 20;
+    private static final int LATCH_ARM_TICKS = 20;
+    private static final int LATCH_READY_TICKS = 400;
+    private static final int LATCH_RIDE_TICKS = 20;
 
     public static final int TUNNEL_DEPTH_WALL = 5;
     public static final int TUNNEL_DEPTH_FLOOR = 6;
@@ -112,6 +119,8 @@ public class ZipperEntity extends Entity {
     private Direction pendingReleaseFace = Direction.NORTH;
     private UUID pendingReleaseOwner = null;
     private int pendingReleaseTicks = 0;
+    private Vec3 latchVelocity = Vec3.ZERO;
+    private int latchRiderId = -1;
     private final List<UUID> swallowed = new ArrayList<>();
     private final java.util.Map<UUID, StoredEntityState> swallowedStates = new java.util.HashMap<>();
     private float lastHealth = 0;
@@ -137,6 +146,14 @@ public class ZipperEntity extends Entity {
     public static ZipperEntity createMini(Level level, LivingEntity owner, BlockPos anchor, Direction face, int baseY) {
         ZipperEntity zipper = new ZipperEntity(ModEntities.ZIPPER, level);
         zipper.setup(owner, anchor, face, baseY, true);
+        return zipper;
+    }
+
+    public static ZipperEntity createLatch(Level level, LivingEntity owner, BlockPos anchor,
+                                           Direction face, int baseY, Vec3 rideVelocity) {
+        ZipperEntity zipper = create(level, owner, anchor, face, baseY);
+        zipper.latchVelocity = rideVelocity;
+        zipper.setState(STATE_LATCH_ARMING);
         return zipper;
     }
 
@@ -663,7 +680,7 @@ public class ZipperEntity extends Entity {
 
     @Override
     public boolean isPickable() {
-        return !this.isRemoved() && getState() == STATE_NEUTRAL;
+        return !this.isRemoved() && (getState() == STATE_NEUTRAL || getState() == STATE_LATCH_READY);
     }
 
     @Override
@@ -683,6 +700,12 @@ public class ZipperEntity extends Entity {
 
     @Override
     public InteractionResult interact(Player player, InteractionHand hand) {
+        if (getState() == STATE_LATCH_READY) {
+            if (!this.level().isClientSide()) {
+                triggerLatchRide(player);
+            }
+            return InteractionResult.SUCCESS;
+        }
         if (!isOwner(player) || getState() != STATE_NEUTRAL) {
             return InteractionResult.PASS;
         }
@@ -706,7 +729,24 @@ public class ZipperEntity extends Entity {
             startOpening(OPEN_ACTION_TUNNEL);
             return true;
         }
+        if (getState() == STATE_LATCH_READY && attacker instanceof LivingEntity living) {
+            triggerLatchRide(living);
+            return true;
+        }
         return false;
+    }
+
+    private void triggerLatchRide(Entity rider) {
+        if (this.level().isClientSide() || getState() != STATE_LATCH_READY
+                || rider == null || rider == this || !rider.isAlive()
+                || rider instanceof StandEntity || rider instanceof ZipperEntity) {
+            return;
+        }
+        latchRiderId = rider.getId();
+        setState(STATE_LATCH_RIDING);
+        this.level().playSound(null, this.blockPosition(), SoundEvents.PISTON_EXTEND,
+                SoundSource.PLAYERS, 0.9F, 1.35F);
+        sparkBurst(this.position().add(0.0D, 0.5D, 0.0D), 10);
     }
 
     private void startOpening(int action) {
@@ -1249,6 +1289,33 @@ public class ZipperEntity extends Entity {
                 }
             }
             case STATE_HIDING -> tickHiding();
+            case STATE_LATCH_ARMING -> {
+                if (stateTicks >= LATCH_ARM_TICKS) {
+                    setState(STATE_LATCH_READY);
+                    this.level().playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                            SoundSource.PLAYERS, 1.0F, 1.4F);
+                    sparkBurst(this.position().add(0.0D, 0.5D, 0.0D), 6);
+                }
+            }
+            case STATE_LATCH_READY -> {
+                if (stateTicks >= LATCH_READY_TICKS) {
+                    setState(STATE_LATCH_RETRACTING);
+                    break;
+                }
+                AABB triggerArea = getBoundingBox().inflate(0.35D, 0.2D, 0.35D);
+                for (Entity candidate : this.level().getEntitiesOfClass(Entity.class, triggerArea,
+                        entity -> entity != this && entity.isAlive() && !(entity instanceof StandEntity)
+                                && !(entity instanceof ZipperEntity))) {
+                    triggerLatchRide(candidate);
+                    break;
+                }
+            }
+            case STATE_LATCH_RIDING -> tickLatchRide();
+            case STATE_LATCH_RETRACTING -> {
+                if (stateTicks >= CLOSE_ANIM_TICKS) {
+                    discard();
+                }
+            }
             case STATE_TUNNEL -> {
                 if (stateTicks >= TUNNEL_TICKS) {
                     close();
@@ -1273,6 +1340,47 @@ public class ZipperEntity extends Entity {
                 }
             }
         }
+    }
+
+    private void tickLatchRide() {
+        Entity rider = this.level().getEntity(latchRiderId);
+        if (rider == null || !rider.isAlive() || stateTicks > LATCH_RIDE_TICKS) {
+            if (rider != null && rider.isAlive()) {
+                rider.setDeltaMovement(latchVelocity.scale(0.65D));
+                rider.hurtMarked = true;
+            }
+            latchRiderId = -1;
+            setState(STATE_LATCH_RETRACTING);
+            return;
+        }
+        Vec3 rideMovement = getLatchRideMovement(rider);
+        rider.setDeltaMovement(rideMovement);
+        if (rider instanceof LivingEntity living) living.fallDistance = 0.0F;
+        rider.hurtMarked = true;
+        this.setPos(this.position().add(rideMovement));
+        this.setDeltaMovement(Vec3.ZERO);
+    }
+
+    private Vec3 getLatchRideMovement(Entity rider) {
+        AABB body = rider.getBoundingBox();
+        if (this.level().noCollision(rider, body.move(latchVelocity))) {
+            return latchVelocity;
+        }
+
+        // When the path meets a stair or wall, add a short upward zip so the rider clears it.
+        // Test headroom first to avoid pushing the rider through ceilings.
+        for (double lift = 0.25D; lift <= 0.75D; lift += 0.25D) {
+            Vec3 stepMotion = new Vec3(latchVelocity.x,
+                    Math.max(0.0D, latchVelocity.y) + lift, latchVelocity.z);
+            if (this.level().noCollision(rider, body.move(stepMotion))) {
+                return stepMotion;
+            }
+        }
+        Vec3 upwardStep = new Vec3(latchVelocity.x, 0.42D, latchVelocity.z);
+        if (this.level().noCollision(rider, body.move(0.0D, 0.42D, 0.0D))) {
+            return upwardStep;
+        }
+        return latchVelocity;
     }
 
     public static final float BITE_DAMAGE = 2.0F;
@@ -1352,6 +1460,7 @@ public class ZipperEntity extends Entity {
     private void tickClientParticles() {
         int state = getState();
         boolean sparkling = state == STATE_OPENING || state == STATE_TUNNEL || state == STATE_STORAGE_OPEN
+                || state == STATE_LATCH_READY || state == STATE_LATCH_RIDING
                 || (state == STATE_MINING && this.tickCount >= getStateStart() + OPEN_ANIM_TICKS);
         if (!sparkling || this.tickCount % 3 != 0 || isHiddenFromLocalPlayer()) {
             return;
@@ -1393,6 +1502,9 @@ public class ZipperEntity extends Entity {
         pendingReleaseFace = Direction.from3DDataValue(tag.getInt("releaseFace"));
         pendingReleaseOwner = tag.hasUUID("releaseOwner") ? tag.getUUID("releaseOwner") : null;
         pendingReleaseTicks = tag.getInt("releaseTicks");
+        latchVelocity = new Vec3(tag.getDouble("latchVelocityX"), tag.getDouble("latchVelocityY"),
+                tag.getDouble("latchVelocityZ"));
+        latchRiderId = tag.getInt("latchRiderId");
         mineDelay = tag.getInt("mineDelay");
         this.entityData.set(MINI, tag.getBoolean("mini"));
         this.entityData.set(FACE, tag.getInt("face"));
@@ -1435,6 +1547,10 @@ public class ZipperEntity extends Entity {
         tag.putInt("releaseFace", pendingReleaseFace.get3DDataValue());
         if (pendingReleaseOwner != null) tag.putUUID("releaseOwner", pendingReleaseOwner);
         tag.putInt("releaseTicks", pendingReleaseTicks);
+        tag.putDouble("latchVelocityX", latchVelocity.x);
+        tag.putDouble("latchVelocityY", latchVelocity.y);
+        tag.putDouble("latchVelocityZ", latchVelocity.z);
+        tag.putInt("latchRiderId", latchRiderId);
         tag.putInt("mineDelay", mineDelay);
         tag.putBoolean("mini", isMini());
         tag.putInt("face", this.entityData.get(FACE));

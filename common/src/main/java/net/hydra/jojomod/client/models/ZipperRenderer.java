@@ -98,6 +98,8 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
 
             case ZipperEntity.STATE_CLOSING -> open = 1.0F;
             case ZipperEntity.STATE_STORAGE -> open = 0.0F;
+            case ZipperEntity.STATE_LATCH_ARMING, ZipperEntity.STATE_LATCH_READY,
+                    ZipperEntity.STATE_LATCH_RIDING, ZipperEntity.STATE_LATCH_RETRACTING -> open = 0.0F;
             default -> open = Mth.clamp(age / ZipperEntity.OPEN_ANIM_TICKS, 0.0F, 1.0F);
         }
         open = open * open * (3.0F - 2.0F * open);
