@@ -730,6 +730,12 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     public void setLatchedFist(StickyFingersFistEntity fist) {
         this.latchedFist = fist;
+        if (fist != null && fist.isLatched()) {
+            // Hold the extended arm in its reaching pose while the fist grips the block.
+            this.fistImpactTicks = 0;
+            this.animateStand(StickyFingersEntity.ZIPPER_FIST_IDLE);
+            this.poseStand(OffsetIndex.ATTACK);
+        }
     }
 
     private boolean hasLatchedFist() {
@@ -1176,22 +1182,29 @@ public class PowersStickyFingers extends NewPunchingStand {
             this.animateStand(StandEntity.IDLE);
             this.poseStand(OffsetIndex.FOLLOW);
         }
+        // The stand can keep following a latched fist while the grapple pulls the user.
+        // When the fist is recalled or times out, ease the segmented arm back to its normal pose.
+        if (getAnimation() == StickyFingersEntity.ZIPPER_FIST_IDLE
+                && !fistPrimed && !hasLatchedFist()) {
+            this.animateStand(StandEntity.IDLE);
+            this.poseStand(OffsetIndex.FOLLOW);
+        }
         if (!this.self.level().isClientSide()) {
             if (grappleTicks > 0) {
                 if (this.self.hurtTime > 0 || latchedFist == null || latchedFist.isRemoved()
                         || !latchedFist.isLatched()) {
-                    grappleTicks = 0;
-                    this.setPowerNone();
+                    finishFistGrapple();
                 } else {
                     Vec3 toFist = latchedFist.position().subtract(this.self.position());
                     if (toFist.lengthSqr() < 1.4D) {
-                        grappleTicks = 0;
-                        this.setPowerNone();
+                        finishFistGrapple();
                     } else {
                         Vec3 pull = toFist.normalize().scale(0.42D);
                         this.self.setDeltaMovement(pull);
                         this.self.hurtMarked = true;
-                        grappleTicks--;
+                        if (--grappleTicks <= 0) {
+                            finishFistGrapple();
+                        }
                     }
                 }
             }
@@ -1251,6 +1264,19 @@ public class PowersStickyFingers extends NewPunchingStand {
                 closeGuillotine();
             }
         }
+    }
+
+    private void finishFistGrapple() {
+        grappleTicks = 0;
+        if (latchedFist != null) {
+            if (!latchedFist.isRemoved()) {
+                latchedFist.discard();
+            }
+            latchedFist = null;
+        }
+        this.setPowerNone();
+        this.animateStand(StandEntity.IDLE);
+        this.poseStand(OffsetIndex.FOLLOW);
     }
 
     @Override

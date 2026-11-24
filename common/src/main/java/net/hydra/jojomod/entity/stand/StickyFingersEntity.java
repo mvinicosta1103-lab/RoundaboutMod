@@ -26,7 +26,7 @@ public class StickyFingersEntity extends FollowingStandEntity {
             StickyFingersFistEntity fist = this.level().getEntitiesOfClass(
                     StickyFingersFistEntity.class,
                     this.getBoundingBox().inflate(16.0D),
-                    entity -> entity.getOwner() == this.getUser() && !entity.isLatched())
+                    entity -> entity.getOwner() == this.getUser())
                     .stream()
                     .findFirst()
                     .orElse(null);

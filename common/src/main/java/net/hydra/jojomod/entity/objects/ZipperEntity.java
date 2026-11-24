@@ -575,7 +575,10 @@ public class ZipperEntity extends Entity {
         int dy = sourceAnchor.getY() - candidateAnchor.getY();
         int dz = sourceAnchor.getZ() - candidateAnchor.getZ();
         int normalOffset = dx * face.getStepX() + dy * face.getStepY() + dz * face.getStepZ();
-        if ((dx == 0 && dy == 0 && dz == 0) || Math.abs(normalOffset) > 1) {
+        // A merged wall/floor path is rendered on one surface plane. If anchors are
+        // one block deeper or higher, that single plane can be behind the other wall
+        // and the connected zipper appears to vanish. Only merge coplanar zippers.
+        if ((dx == 0 && dy == 0 && dz == 0) || normalOffset != 0) {
             return false;
         }
 

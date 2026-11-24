@@ -56,19 +56,18 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
                 || entity.isHiddenFromLocalPlayer()) {
             return false;
         }
-        if (super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ)) {
-            return true;
-        }
+        if (super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ)) return true;
 
-
-        if (!entity.shouldRender(cameraX, cameraY, cameraZ)) {
-            return false;
-        }
+        // The group is rendered by one leader, but the leader may be outside the view
+        // while another connected zipper is still visible (especially around long walls).
+        // Build the group's bounds and range from every member before culling the whole path.
         AABB groupBounds = entity.getBoundingBox();
+        boolean anyMemberInRange = entity.shouldRender(cameraX, cameraY, cameraZ);
         for (ZipperEntity member : entity.getConnectedZippers()) {
             groupBounds = groupBounds.minmax(member.getBoundingBox());
+            anyMemberInRange |= member.shouldRender(cameraX, cameraY, cameraZ);
         }
-        return frustum.isVisible(groupBounds.inflate(2.0D));
+        return anyMemberInRange && frustum.isVisible(groupBounds.inflate(2.0D));
     }
 
     @Override
@@ -107,7 +106,8 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         Direction face = entity.getFace();
         boolean flat = face.getAxis() == Direction.Axis.Y && entity.getVehicle() == null;
         float baseLength = (flat || entity.isMini()) ? 1.0F : 2.0F;
-        float baseHalfWidth = 0.46F;
+        // Imported art is 16x48: retain its 1:3 width-to-length ratio on surfaces.
+        float baseHalfWidth = baseLength / 6.0F;
         ZipperEntity.MergeRenderLayout layout = entity.getMergeRenderLayout(baseHalfWidth, baseLength, true);
         float length = layout.length();
         float widthScale = layout.width() / (baseHalfWidth * 2.0F);
@@ -128,10 +128,8 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         if (flat) {
             List<ZipperEntity.ZipperPathCell> path = entity.getMergedFloorPath();
             if (path.size() > 1) {
-                VertexConsumer pathConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
-                renderFloorPath(path, 0.40F, open,
-                        state == ZipperEntity.STATE_CLOSING ? age : -1.0F, dimensionFrame, light,
-                        poseStack, pathConsumer);
+                renderFloorPath(path, open, state, state == ZipperEntity.STATE_CLOSING ? age : -1.0F,
+                        entity.tickCount, partialTicks, light, poseStack, buffer);
                 poseStack.popPose();
                 super.render(entity, yaw, partialTicks, poseStack, buffer, light);
                 return;
@@ -139,10 +137,8 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         } else if (entity.getVehicle() == null) {
             List<ZipperEntity.ZipperPathCell> path = entity.getMergedWallPath();
             if (path.size() > 1) {
-                VertexConsumer pathConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
-                renderFloorPath(path, 0.40F, open,
-                        state == ZipperEntity.STATE_CLOSING ? age : -1.0F, dimensionFrame, light,
-                        poseStack, pathConsumer);
+                renderFloorPath(path, open, state, state == ZipperEntity.STATE_CLOSING ? age : -1.0F,
+                        entity.tickCount, partialTicks, light, poseStack, buffer);
                 poseStack.popPose();
                 super.render(entity, yaw, partialTicks, poseStack, buffer, light);
                 return;
@@ -150,6 +146,32 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         }
         poseStack.mulPose(Axis.ZP.rotationDegrees(layout.rotationDegrees()));
         poseStack.translate(layout.centerX(), layout.centerY() - length / 2.0F, 0.0F);
+
+        SpriteFrame spriteFrame = getSpriteFrame(entity, state, age, open, partialTicks);
+        if (spriteFrame != null) {
+            if (state == ZipperEntity.STATE_TUNNEL) {
+                ZipperSpriteAtlas.Sprite dimension = ZipperSpriteAtlas.DIMENSION_LOOP;
+                int frame = ZipperSpriteAtlas.loopFrame(entity.tickCount, partialTicks, dimension, 1);
+                spriteFrame = new SpriteFrame(ZipperSpriteAtlas.UNZIP_OPEN,
+                        ZipperSpriteAtlas.UNZIP_OPEN.frameCount() - 1);
+                ZipperSpriteAtlas.drawRegion(ZipperSpriteAtlas.buffer(buffer, dimension), poseStack.last(),
+                        dimension, frame, 4.0F, 12.0F, -layout.width() / 4.0F, 0.02F,
+                        layout.width() / 4.0F, length - 0.02F, 0.02F, light);
+                VertexConsumer zipperConsumer = ZipperSpriteAtlas.buffer(buffer, spriteFrame.sprite());
+                ZipperSpriteAtlas.draw(zipperConsumer, poseStack.last(), spriteFrame.sprite(), spriteFrame.frame(),
+                        -layout.width() / 2.0F, 0.0F, layout.width() / 2.0F, length, 0.03F, light);
+                poseStack.popPose();
+                super.render(entity, yaw, partialTicks, poseStack, buffer, light);
+                return;
+            }
+            VertexConsumer spriteConsumer = ZipperSpriteAtlas.buffer(buffer, spriteFrame.sprite());
+            ZipperSpriteAtlas.draw(spriteConsumer, poseStack.last(), spriteFrame.sprite(), spriteFrame.frame(),
+                    -layout.width() / 2.0F, 0.0F, layout.width() / 2.0F, length,
+                    0.025F, light);
+            poseStack.popPose();
+            super.render(entity, yaw, partialTicks, poseStack, buffer, light);
+            return;
+        }
 
         VertexConsumer consumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
         PoseStack.Pose pose = poseStack.last();
@@ -192,20 +214,53 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         super.render(entity, yaw, partialTicks, poseStack, buffer, light);
     }
 
-    private static void renderFloorPath(List<ZipperEntity.ZipperPathCell> path, float maxHalf,
-                                        float open, float closeAge, int frame, int light, PoseStack poseStack,
-                                        VertexConsumer consumer) {
+    private static SpriteFrame getSpriteFrame(ZipperEntity entity, int state, float age,
+                                               float open, float partialTicks) {
+        if (state == ZipperEntity.STATE_NEUTRAL
+                || state == ZipperEntity.STATE_LATCH_ARMING
+                || state == ZipperEntity.STATE_LATCH_READY
+                || state == ZipperEntity.STATE_LATCH_RIDING
+                || state == ZipperEntity.STATE_LATCH_RETRACTING) {
+            return new SpriteFrame(ZipperSpriteAtlas.UNZIP_OPEN, 0);
+        }
+        if (state == ZipperEntity.STATE_OPENING) {
+            return new SpriteFrame(ZipperSpriteAtlas.UNZIP_OPEN,
+                    ZipperSpriteAtlas.frameAtProgress(open, ZipperSpriteAtlas.UNZIP_OPEN));
+        }
+        if (state == ZipperEntity.STATE_TUNNEL) {
+            return new SpriteFrame(ZipperSpriteAtlas.DIMENSION_LOOP,
+                    ZipperSpriteAtlas.loopFrame(entity.tickCount, partialTicks,
+                            ZipperSpriteAtlas.DIMENSION_LOOP, 2));
+        }
+        if (state == ZipperEntity.STATE_CLOSING) {
+            float progress = Mth.clamp(age / ZipperEntity.CLOSE_ANIM_TICKS, 0.0F, 1.0F);
+            return new SpriteFrame(ZipperSpriteAtlas.UNZIP_CLOSE,
+                    ZipperSpriteAtlas.frameAtProgress(progress, ZipperSpriteAtlas.UNZIP_CLOSE));
+        }
+        if (state == ZipperEntity.STATE_MINING) {
+            if (age < ZipperEntity.OPEN_ANIM_TICKS) {
+                float progress = Mth.clamp(age / ZipperEntity.OPEN_ANIM_TICKS, 0.0F, 1.0F);
+                return new SpriteFrame(ZipperSpriteAtlas.STORAGE_OPEN,
+                        ZipperSpriteAtlas.frameAtProgress(progress, ZipperSpriteAtlas.STORAGE_OPEN));
+            }
+            return new SpriteFrame(ZipperSpriteAtlas.STORAGE_IDLE, 0);
+        }
+        return null;
+    }
+
+    private static void renderFloorPath(List<ZipperEntity.ZipperPathCell> path, float open, int state,
+                                        float closeAge, int tick, float partialTicks, int light,
+                                        PoseStack poseStack, MultiBufferSource buffers) {
+        List<PathEdge> edges = new ArrayList<>();
         Set<ZipperEntity.ZipperPathCell> cells = new HashSet<>(path);
         int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        List<PathEdge> edges = new ArrayList<>();
-        for (ZipperEntity.ZipperPathCell cell : path) {
+        for (ZipperEntity.ZipperPathCell cell : cells) {
             for (int[] direction : directions) {
                 ZipperEntity.ZipperPathCell neighbor = new ZipperEntity.ZipperPathCell(
                         cell.u() + direction[0], cell.v() + direction[1]);
-                if (!cells.contains(neighbor) || comparePathCells(cell, neighbor) >= 0) {
-                    continue;
+                if (cells.contains(neighbor) && comparePathCells(cell, neighbor) < 0) {
+                    edges.add(new PathEdge(cell, neighbor));
                 }
-                edges.add(new PathEdge(cell, neighbor));
             }
         }
         // Close outward from the zipper that was activated, so branches and loops retract in waves.
@@ -220,64 +275,39 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             float dx = edge.second().u() - edge.first().u();
             float dy = edge.second().v() - edge.first().v();
             float angle = (float) Math.toDegrees(Math.atan2(-dx, dy));
+            ZipperSpriteAtlas.Sprite sprite;
+            int spriteFrame;
+            if (closeAge >= 0.0F) {
+                sprite = ZipperSpriteAtlas.UNZIP_CLOSE;
+                spriteFrame = ZipperSpriteAtlas.frameAtProgress(1.0F - edgeOpen, sprite);
+            } else if (state == ZipperEntity.STATE_TUNNEL) {
+                sprite = ZipperSpriteAtlas.DIMENSION_LOOP;
+                spriteFrame = ZipperSpriteAtlas.loopFrame(tick + index, partialTicks, sprite, 2);
+            } else {
+                sprite = ZipperSpriteAtlas.UNZIP_OPEN;
+                spriteFrame = ZipperSpriteAtlas.frameAtProgress(edgeOpen, sprite);
+            }
             poseStack.pushPose();
             poseStack.translate((edge.first().u() + edge.second().u()) * 0.5F,
                     (edge.first().v() + edge.second().v()) * 0.5F, 0.0F);
             poseStack.mulPose(Axis.ZP.rotationDegrees(angle));
-            PoseStack.Pose pose = poseStack.last();
-            Matrix4f matrix = pose.pose();
-            Matrix3f normal = pose.normal();
-            float gap = maxHalf * edgeOpen;
-            if (gap > 0.001F) {
-                quad(consumer, matrix, normal, -gap, -0.5F, gap, 0.5F,
-                        0.005F, 0, frame, light);
-            }
-            quad(consumer, matrix, normal, -gap - TOOTH_WIDTH, -0.5F, -gap, 0.5F,
-                    0.02F, 2, frame, light);
-            quad(consumer, matrix, normal, gap, -0.5F, gap + TOOTH_WIDTH, 0.5F,
-                    0.02F, 2, frame, light);
-            poseStack.popPose();
-        }
-
-        for (ZipperEntity.ZipperPathCell cell : path) {
-            ZipperEntity.ZipperPathCell onlyNeighbor = null;
-            int degree = 0;
-            for (int[] direction : directions) {
-                ZipperEntity.ZipperPathCell neighbor = new ZipperEntity.ZipperPathCell(
-                        cell.u() + direction[0], cell.v() + direction[1]);
-                if (cells.contains(neighbor)) {
-                    degree++;
-                    onlyNeighbor = neighbor;
-                }
-            }
-            if (degree != 1 || onlyNeighbor == null) {
+            if (closeAge < 0.0F && state == ZipperEntity.STATE_TUNNEL) {
+                ZipperSpriteAtlas.Sprite dimension = ZipperSpriteAtlas.DIMENSION_LOOP;
+                int dimensionFrame = ZipperSpriteAtlas.loopFrame(tick + index, partialTicks, dimension, 1);
+                sprite = ZipperSpriteAtlas.UNZIP_OPEN;
+                spriteFrame = sprite.frameCount() - 1;
+                ZipperSpriteAtlas.drawRegion(ZipperSpriteAtlas.buffer(buffers, dimension), poseStack.last(),
+                        dimension, dimensionFrame, 4.0F, 12.0F,
+                        -1.0F / 12.0F, -0.48F, 1.0F / 12.0F, 0.48F, 0.02F, light);
+                VertexConsumer zipperConsumer = ZipperSpriteAtlas.buffer(buffers, sprite);
+                ZipperSpriteAtlas.draw(zipperConsumer, poseStack.last(), sprite, spriteFrame,
+                        -1.0F / 6.0F, -0.5F, 1.0F / 6.0F, 0.5F, 0.03F, light);
+                poseStack.popPose();
                 continue;
             }
-            if (closeAge >= 0.0F) {
-                int edgeIndex = -1;
-                for (int i = 0; i < edges.size(); i++) {
-                    PathEdge edge = edges.get(i);
-                    if ((edge.first().equals(cell) && edge.second().equals(onlyNeighbor))
-                            || (edge.second().equals(cell) && edge.first().equals(onlyNeighbor))) {
-                        edgeIndex = i;
-                        break;
-                    }
-                }
-                if (edgeIndex < 0 || closingSegmentOpen(closeAge, edgeIndex, edges.size()) <= 0.01F) {
-                    continue;
-                }
-            }
-            float dx = cell.u() - onlyNeighbor.u();
-            float dy = cell.v() - onlyNeighbor.v();
-            float angle = (float) Math.toDegrees(Math.atan2(-dx, dy));
-            poseStack.pushPose();
-            poseStack.translate(cell.u(), cell.v(), 0.0F);
-            poseStack.mulPose(Axis.ZP.rotationDegrees(angle));
-            PoseStack.Pose pose = poseStack.last();
-            Matrix4f matrix = pose.pose();
-            Matrix3f normal = pose.normal();
-            quad(consumer, matrix, normal, -0.07F, -0.07F, 0.07F, 0.07F,
-                    0.03F, 3, frame, light);
+            VertexConsumer consumer = ZipperSpriteAtlas.buffer(buffers, sprite);
+            ZipperSpriteAtlas.draw(consumer, poseStack.last(), sprite, spriteFrame,
+                    -1.0F / 6.0F, -0.5F, 1.0F / 6.0F, 0.5F, 0.025F, light);
             poseStack.popPose();
         }
     }
@@ -298,6 +328,8 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
             return midpointU * midpointU + midpointV * midpointV;
         }
     }
+
+    private record SpriteFrame(ZipperSpriteAtlas.Sprite sprite, int frame) {}
 
     private static int comparePathCells(ZipperEntity.ZipperPathCell first,
                                         ZipperEntity.ZipperPathCell second) {
