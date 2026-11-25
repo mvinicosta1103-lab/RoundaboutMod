@@ -376,6 +376,15 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     private static final EntityDataAccessor<Integer> ROUNDABOUT$STICKY_DISMEMBERMENT =
             SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.INT);
     @Unique
+    private static final EntityDataAccessor<Integer> ROUNDABOUT$STICKY_GRAFT_MASK =
+            SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.INT);
+    @Unique
+    private static final EntityDataAccessor<String> ROUNDABOUT$STICKY_GRAFT_DATA =
+            SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.STRING);
+    @Unique
+    private static final EntityDataAccessor<Integer> ROUNDABOUT$STICKY_AUTO_UNZIP_CONFIG =
+            SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.INT);
+    @Unique
     private static final EntityDataAccessor<Boolean> ROUNDABOUT$IN_ZIPPER_DIMENSION =
             SynchedEntityData.defineId(LivingEntity.class, EntityDataSerializers.BOOLEAN);
     @Unique
@@ -2696,6 +2705,9 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     public CompoundTag roundabout$addAdditionalSaveData(CompoundTag $$0) {
         CompoundTag saved = MainUtil.saveLivingData($$0,this,(LivingEntity)(Object) this);
         saved.putInt("RoundaboutStickyDismemberment", roundabout$getStickyFingersDismemberment());
+        saved.putInt("RoundaboutStickyGraftMask", roundabout$getStickyFingersGraftMask());
+        saved.putString("RoundaboutStickyGraftData", roundabout$getStickyFingersGraftData());
+        saved.putInt("RoundaboutStickyAutoUnzipConfig", roundabout$getStickyFingersAutoUnzipConfig());
         return saved;
     }
 
@@ -2705,6 +2717,9 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
         try {
             MainUtil.loadLivingData($$0,this,(LivingEntity)(Object) this);
             roundabout$setStickyFingersDismemberment($$0.getInt("RoundaboutStickyDismemberment"));
+            roundabout$setStickyFingersGraftMask($$0.getInt("RoundaboutStickyGraftMask"));
+            roundabout$setStickyFingersGraftData($$0.getString("RoundaboutStickyGraftData"));
+            roundabout$setStickyFingersAutoUnzipConfig($$0.getInt("RoundaboutStickyAutoUnzipConfig"));
         } finally {
             roundabout$loadingStandData = false;
         }
@@ -2718,6 +2733,41 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
     @Override
     public void roundabout$setStickyFingersDismemberment(int mask) {
         ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$STICKY_DISMEMBERMENT, mask & 31);
+    }
+
+    @Override
+    public int roundabout$getStickyFingersGraftMask() {
+        return ((LivingEntity) (Object) this).getEntityData().get(ROUNDABOUT$STICKY_GRAFT_MASK);
+    }
+
+    @Override
+    public void roundabout$setStickyFingersGraftMask(int mask) {
+        ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$STICKY_GRAFT_MASK, mask & 30);
+    }
+
+    @Override
+    public String roundabout$getStickyFingersGraftData() {
+        return ((LivingEntity) (Object) this).getEntityData().get(ROUNDABOUT$STICKY_GRAFT_DATA);
+    }
+
+    @Override
+    public void roundabout$setStickyFingersGraftData(String data) {
+        ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$STICKY_GRAFT_DATA,
+                data == null ? "" : data.substring(0, Math.min(data.length(), 1024)));
+    }
+
+    @Override
+    public int roundabout$getStickyFingersAutoUnzipConfig() {
+        return ((LivingEntity) (Object) this).getEntityData().get(ROUNDABOUT$STICKY_AUTO_UNZIP_CONFIG);
+    }
+
+    @Override
+    public void roundabout$setStickyFingersAutoUnzipConfig(int config) {
+        int valid = PowersStickyFingers.ZIPPER_AUTO_UNZIP_ENABLED
+                | PowersStickyFingers.ZIPPER_PART_HEAD | PowersStickyFingers.ZIPPER_PART_LEFT_ARM
+                | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM | PowersStickyFingers.ZIPPER_PART_LEFT_LEG
+                | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
+        ((LivingEntity) (Object) this).getEntityData().set(ROUNDABOUT$STICKY_AUTO_UNZIP_CONFIG, config & valid);
     }
 
     @Override
@@ -2823,6 +2873,10 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
             cancellable = true, require = 0)
     private void roundabout$denyAttacksWithoutArms(DamageSource source, float amount,
                                                    CallbackInfoReturnable<Boolean> cir) {
+        if (PowersStickyFingers.redirectGraftedLimbDamage((LivingEntity) (Object) this, source, amount)) {
+            cir.setReturnValue(true);
+            return;
+        }
         if (roundabout$isInZipperDimension()) {
             cir.setReturnValue(false);
             return;
@@ -4201,6 +4255,9 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GRABBER_ID, 0);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$GE_TREE_ROOT, false);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$STICKY_DISMEMBERMENT, 0);
+            ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$STICKY_GRAFT_MASK, 0);
+            ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$STICKY_GRAFT_DATA, "");
+            ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$STICKY_AUTO_UNZIP_CONFIG, 0);
             ((LivingEntity) (Object) this).getEntityData().define(ROUNDABOUT$IN_ZIPPER_DIMENSION, false);
         }
     }

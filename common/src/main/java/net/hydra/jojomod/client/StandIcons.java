@@ -699,6 +699,12 @@ public class StandIcons {
             "textures/gui/icons/sticky_fingers/fist.png");
     public static final ResourceLocation STICKY_FINGERS_VAULT = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/sticky_fingers/vault.png");
+    public static final ResourceLocation STICKY_FINGERS_GUILLOTINE = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zipper_guillotine.png");
+    public static final ResourceLocation STICKY_FINGERS_LIMB_GRAFT = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/limb_graft.png");
+    public static final ResourceLocation STICKY_FINGERS_POLE_COLLAPSE = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/pole_collapse.png");
 
     public static final ResourceLocation MANDOM_VISION_ON = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/mandom/vision_on.png");

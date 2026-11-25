@@ -1371,6 +1371,17 @@ public class ClientUtil {
             int part = data2 & 0xFF;
             int duration = data2 >>> 8;
             PowersStickyFingers.updateClientDismemberment(data, part, duration);
+        } else if (context == PacketDataIndex.S2C_ZIPPER_LIMB_CONSUMED) {
+            ZipperDetachedLimbRenderer.consume(data, data2);
+        } else if (context == PacketDataIndex.S2C_ZIPPER_LIMB_ANIMATION) {
+            ZipperDetachedLimbRenderer.playZipperAnimation(data, data2);
+        } else if (context == PacketDataIndex.S2C_ZIPPER_GRAFT_ATTACH) {
+            int donorId = data2 >>> 6;
+            int donorPart = 1 << (data2 & 7);
+            int recipientPart = 1 << ((data2 >>> 3) & 7);
+            ZipperDetachedLimbRenderer.attachGraftedLimb(data, donorId, donorPart, recipientPart);
+        } else if (context == PacketDataIndex.S2C_ZIPPER_GRAFT_CLEAR) {
+            ZipperDetachedLimbRenderer.clearGrafts(data);
         } else if (context == PacketDataIndex.S2C_INT_FADE){
             Entity target = player.level().getEntity(data);
             if (target instanceof Player pl) {
@@ -1879,6 +1890,12 @@ public class ClientUtil {
     }
     public static void openStickyFingersUnzipScreen(){
         Minecraft.getInstance().setScreen(new StickyFingersUnzipScreen());
+    }
+    public static void openStickyFingersAutoUnzipScreen(){
+        Minecraft.getInstance().setScreen(new StickyFingersAutoUnzipScreen());
+    }
+    public static void openStickyFingersLimbModeScreen(){
+        openStickyFingersAutoUnzipScreen();
     }
     public static void openPowerSwitchScreen(){
         Minecraft.getInstance().setScreen(new PowerSwitcherScreen());

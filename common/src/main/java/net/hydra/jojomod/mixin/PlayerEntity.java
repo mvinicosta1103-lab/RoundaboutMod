@@ -98,6 +98,9 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
 
     @Shadow public abstract boolean isSwimming();
 
+    @Unique private LivingEntity roundabout$stickyAttackTarget;
+    @Unique private float roundabout$stickyAttackTargetHealth;
+
     @Shadow public abstract float getDestroySpeed(BlockState $$0);
 
     @Unique
@@ -2194,6 +2197,8 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
             ci.cancel();
             return;
         }
+        roundabout$stickyAttackTarget = $$0 instanceof LivingEntity target ? target : null;
+        roundabout$stickyAttackTargetHealth = roundabout$stickyAttackTarget == null ? 0.0F : roundabout$stickyAttackTarget.getHealth();
         if (roundabout$getVoiceData() != null){
             if ($$0.isAttackable()) {
                 if (!$$0.skipAttackInteraction(this)) {
@@ -2201,6 +2206,24 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
                 }
             }
         }
+    }
+
+    @Inject(method = "attack", at = @At("TAIL"), require = 0)
+    private void roundabout$applyGraftedArmEffect(Entity target, CallbackInfo ci) {
+        if (!this.level().isClientSide() && target instanceof LivingEntity livingTarget
+                && livingTarget == roundabout$stickyAttackTarget
+                && livingTarget.getHealth() < roundabout$stickyAttackTargetHealth) {
+            PowersStickyFingers.applyGraftedArmAttackEffect((Player) (Object) this, livingTarget);
+            if (((StandUser) (Object) this).roundabout$getStandPowers() instanceof PowersStickyFingers sticky) {
+                sticky.applyConfiguredAttackDismemberment(livingTarget);
+            }
+        }
+        roundabout$stickyAttackTarget = null;
+    }
+
+    @ModifyVariable(method = "causeFoodExhaustion(F)V", at = @At("HEAD"), argsOnly = true, require = 0)
+    private float roundabout$reduceHuskArmExhaustion(float exhaustion) {
+        return PowersStickyFingers.hasHuskGraft((Player) (Object) this) ? exhaustion * 0.5F : exhaustion;
     }
 
     @Inject(method = "take(Lnet/minecraft/world/entity/Entity;I)V", at = @At("HEAD"), cancellable = true, require = 0)

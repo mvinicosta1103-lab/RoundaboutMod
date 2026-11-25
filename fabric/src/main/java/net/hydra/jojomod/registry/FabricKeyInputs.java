@@ -27,6 +27,7 @@ public class FabricKeyInputs {
         KeyBindingHelper.registerKeyBinding(KeyInputRegistry.abilityFourKey);
 
         KeyBindingHelper.registerKeyBinding(KeyInputRegistry.menuKey);
+        KeyBindingHelper.registerKeyBinding(KeyInputRegistry.stickyUnzipConfigKey);
         
         KeyBindingHelper.registerKeyBinding(KeyInputRegistry.guardKey);
 

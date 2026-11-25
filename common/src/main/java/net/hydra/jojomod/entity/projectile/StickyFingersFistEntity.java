@@ -97,6 +97,7 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
                 if (attacker instanceof StandUser standUser
                         && standUser.roundabout$getStandPowers() instanceof PowersStickyFingers powers) {
                     powers.addTag(living);
+                    powers.applyConfiguredAttackDismemberment(living);
                 }
                 // Stronger inward impulse makes the special pull variant feel distinct from a normal hit.
                 Vec3 pull = attacker.position().subtract(living.position()).normalize().scale(0.90D);

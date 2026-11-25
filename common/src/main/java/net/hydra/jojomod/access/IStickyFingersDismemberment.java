@@ -6,6 +6,18 @@ public interface IStickyFingersDismemberment {
 
     void roundabout$setStickyFingersDismemberment(int mask);
 
+    int roundabout$getStickyFingersGraftMask();
+
+    void roundabout$setStickyFingersGraftMask(int mask);
+
+    String roundabout$getStickyFingersGraftData();
+
+    void roundabout$setStickyFingersGraftData(String data);
+
+    int roundabout$getStickyFingersAutoUnzipConfig();
+
+    void roundabout$setStickyFingersAutoUnzipConfig(int config);
+
     boolean roundabout$isInZipperDimension();
 
     void roundabout$setInZipperDimension(boolean inside);

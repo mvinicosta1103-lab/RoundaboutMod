@@ -146,6 +146,10 @@ public class PacketDataIndex {
     public static final byte S2C_KN_SYNC_FORM_PREDICT_ENTITY = 37;
     public static final byte S2C_ZIPPER_MARK = 38;
     public static final byte S2C_ZIPPER_DISMEMBERMENT = 39;
+    public static final byte S2C_ZIPPER_LIMB_CONSUMED = 40;
+    public static final byte S2C_ZIPPER_LIMB_ANIMATION = 41;
+    public static final byte S2C_ZIPPER_GRAFT_ATTACH = 42;
+    public static final byte S2C_ZIPPER_GRAFT_CLEAR = 43;
 
 
     /**S2C BUNDLE packets*/
