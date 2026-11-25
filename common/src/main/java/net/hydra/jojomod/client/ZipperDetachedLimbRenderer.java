@@ -218,8 +218,8 @@ public final class ZipperDetachedLimbRenderer {
         for (Map<String, DroppedLimb> limbs : DROPPED_LIMBS.values()) {
             for (DroppedLimb limb : limbs.values()) {
                 int mask = partMaskForName(normalize(limb.name()));
-                // A graft must come from another entity; never let the user's own loose limb win the ray test.
-                if (limb.level() != player.level() || limb.ownerId() == player.getId() || (mask & compatibleMask) == 0
+                // The user can reclaim their own missing limb or graft a compatible limb from another entity.
+                if (limb.level() != player.level() || (mask & compatibleMask) == 0
                         || (mask & (PowersStickyFingers.ZIPPER_PART_LEFT_ARM
                         | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM | PowersStickyFingers.ZIPPER_PART_LEFT_LEG
                         | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG)) == 0) continue;

@@ -1248,6 +1248,29 @@ public class PowersStickyFingers extends NewPunchingStand {
 
         int recipientMask = receiver.roundabout$getStickyFingersDismemberment();
         int donorMask = source.roundabout$getStickyFingersDismemberment();
+
+        // If the targeted piece came from this player, restore the native limb in place and
+        // consume the loose copy. This avoids creating a graft duplicate of their own part.
+        if (donor == this.self) {
+            int restoredPart = donorMask & recipientMask & donorPart & LIMB_MASK;
+            if (Integer.bitCount(restoredPart) != 1) return;
+            receiver.roundabout$setStickyFingersDismemberment(recipientMask & ~restoredPart);
+            int graftMask = receiver.roundabout$getStickyFingersGraftMask() & ~restoredPart;
+            receiver.roundabout$setStickyFingersGraftMask(graftMask);
+            setGraftOrigins(receiver, graftMask, receiver.roundabout$getStickyFingersGraftData());
+            this.setCooldown(PowerIndex.SKILL_4_SNEAK, ZIPPER_LIMB_GRAFT_COOLDOWN);
+            S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_LIMB_CONSUMED,
+                    this.self.getId(), restoredPart);
+            S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_LIMB_ANIMATION,
+                    this.self.getId(), restoredPart);
+            serverLevel.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                    SoundSource.PLAYERS, 1.0F, 1.25F);
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, this.self.getX(),
+                    this.self.getY() + this.self.getBbHeight() * 0.5D, this.self.getZ(),
+                    16, 0.3D, 0.4D, 0.3D, 0.025D);
+            return;
+        }
+
         LimbTransfer transfer = chooseLimbPart(recipientMask, donorMask & donorPart);
         if (transfer == null) {
             message("roundabout.zipper.limb_wrong_side");
