@@ -78,7 +78,7 @@ public class ZipperEntity extends Entity {
     public static final int HIDE_TICKS = 160;
     public static final int TUNNEL_TICKS = 100;
     public static final int OPEN_ANIM_TICKS = 8;
-    /** Zipper time before it retracts (20 ticks = 1 second) */
+    /** Zipper time before it retracts (20 ticks = 1 second) **/
     public static final int CLOSE_ANIM_TICKS = 20;
     private static final int LATCH_ARM_TICKS = 20;
     private static final int LATCH_READY_TICKS = 400;

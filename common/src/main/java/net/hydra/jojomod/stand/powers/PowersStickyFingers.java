@@ -911,8 +911,24 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final int MASS_UNZIP_MAX_ZIPPERS = 50;
     public static final int MASS_UNZIP_BARRAGE_TICKS = 40;
 
+    /** Longest the stand can stay anchored to the surface, even if some zipper takes very long to finish. */
+    public static final int MASS_UNZIP_BARRAGE_MAX_TICKS = 120;
+
+    /** Floor/ceiling: how far above (below) the surface the stand hovers while it punches it. */
+    public static final double BARRAGE_FLOOR_STAND_HEIGHT = 2.2D;
+    /** Wall: how far in front of the wall the stand stands. */
+    public static final double BARRAGE_WALL_STAND_DISTANCE = 1.8D;
+    /** Wall: how far under the middle of the zippered area the stand's feet are (so its fists hit the middle). */
+    public static final double BARRAGE_WALL_STAND_LOWER = 1.2D;
+    /** Wall: slight downward tilt of the stand while it punches the wall. */
+    public static final float BARRAGE_WALL_STAND_PITCH = 8.0F;
+
     private int barrageTimer = 0;
     private Vec3 barrageSpot = null;
+    /** Where the stand is anchored while the barrage runs (it does NOT follow the user meanwhile). */
+    private Vec3 barrageStandPos = null;
+    private float barrageStandPitch = 0.0F;
+    private float barrageStandYaw = 0.0F;
 
     public void massUnzipClient() {
         if (!this.onCooldown(PowerIndex.SKILL_1_SNEAK)) {
@@ -957,6 +973,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         BlockPos anchor = blockHit.getBlockPos();
         Direction face = blockHit.getDirection();
         int count = 0;
+        int longestZipper = 0;
         for (BlockPos pos : massUnzipArea(anchor, face)) {
             if (count >= MASS_UNZIP_MAX_ZIPPERS) {
                 break;
@@ -976,6 +993,8 @@ public class PowersStickyFingers extends NewPunchingStand {
             int stagger = zipMode ? distance + level.random.nextInt(2) : distance * 2 + level.random.nextInt(3);
             zipper.startMining(stagger, mineTicks);
             level.addFreshEntity(zipper);
+            longestZipper = Math.max(longestZipper,
+                    stagger + ZipperEntity.OPEN_ANIM_TICKS + mineTicks + ZipperEntity.CLOSE_ANIM_TICKS);
             count++;
         }
         if (count == 0) {
@@ -984,26 +1003,78 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         level.playSound(null, this.self.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2F, 0.7F);
         level.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.2F, 0.5F);
-        startBarrageAnimation(anchor, face);
+        startBarrageAnimation(anchor, face, longestZipper);
     }
 
-    private void startBarrageAnimation(BlockPos anchor, Direction face) {
-        barrageTimer = MASS_UNZIP_BARRAGE_TICKS;
+    /**
+     * The stand stops following its user and goes to the surface: over the floor it hovers above the target
+     * and punches straight down, in front of a wall it faces the wall. It stays there until the barrage and the
+     * zippers are done (the user is free to walk away meanwhile), then it goes back to the user.
+     */
+    private void startBarrageAnimation(BlockPos anchor, Direction face, int zipperTicks) {
+        barrageTimer = Mth.clamp(zipperTicks, MASS_UNZIP_BARRAGE_TICKS, MASS_UNZIP_BARRAGE_MAX_TICKS);
         barrageSpot = Vec3.atCenterOf(anchor).add(face.getStepX() * 0.5D, face.getStepY() * 0.5D, face.getStepZ() * 0.5D);
-        this.poseStand(OffsetIndex.ATTACK);
+        computeBarrageStandPlacement(anchor, face);
+        anchorBarrageStand();
         this.animateStand(StandEntity.BARRAGE);
         playBarrageCrySound();
     }
 
-    private void tickBarrageAnimation() {
-        barrageTimer--;
-        if (barrageTimer <= 0) {
-            barrageSpot = null;
-            this.setPowerNone();
+    private void computeBarrageStandPlacement(BlockPos anchor, Direction face) {
+        if (face.getAxis() == Direction.Axis.Y) {
+            //floor: hover over the target looking straight down. Ceiling: hang below it looking straight up.
+            boolean floor = face == Direction.UP;
+            double y = floor ? barrageSpot.y + BARRAGE_FLOOR_STAND_HEIGHT
+                    : barrageSpot.y - BARRAGE_FLOOR_STAND_HEIGHT - 1.8D;
+            barrageStandPos = new Vec3(barrageSpot.x, y, barrageSpot.z);
+            barrageStandPitch = floor ? 90.0F : -90.0F;
+            barrageStandYaw = this.self.getYRot();
+        } else {
+            //wall: stand in front of the wall, facing it (forward = into the wall)
+            double nx = face.getStepX();
+            double nz = face.getStepZ();
+            double middleY = anchor.getY() + 1.5D;
+            barrageStandPos = new Vec3(barrageSpot.x + nx * BARRAGE_WALL_STAND_DISTANCE,
+                    middleY - BARRAGE_WALL_STAND_LOWER,
+                    barrageSpot.z + nz * BARRAGE_WALL_STAND_DISTANCE);
+            barrageStandYaw = (float) (Mth.atan2(nx, -nz) * 57.29577951308232D);
+            barrageStandPitch = BARRAGE_WALL_STAND_PITCH;
+        }
+    }
+
+    /** Puts the stand on its anchor in LOOSE mode, which makes it ignore the user's position and rotation. */
+    private void anchorBarrageStand() {
+        if (barrageStandPos == null) {
             return;
         }
+        StandEntity stand = this.getStandEntity(this.self);
+        if (stand == null) {
+            return;
+        }
+        this.poseStand(OffsetIndex.LOOSE);
+        stand.setPos(barrageStandPos.x, barrageStandPos.y, barrageStandPos.z);
+        stand.setXRot(barrageStandPitch);
+        stand.setYRot(barrageStandYaw);
+        stand.setYBodyRot(barrageStandYaw);
+    }
+
+    private void endBarrageAnimation() {
+        barrageSpot = null;
+        barrageStandPos = null;
+        //back to following the user: pose FOLLOW + idle animation
+        this.setPowerNone();
+    }
+
+    private void tickBarrageAnimation() {
+        barrageTimer--;
+        if (barrageTimer <= 0 || !this.self.isAlive() || this.getStandEntity(this.self) == null) {
+            endBarrageAnimation();
+            barrageTimer = 0;
+            return;
+        }
+        //other stand logic may try to pull the stand back to the user, so it is re-anchored every tick
+        anchorBarrageStand();
         if (barrageTimer % 5 == 0) {
-            this.poseStand(OffsetIndex.ATTACK);
             this.animateStand(StandEntity.BARRAGE);
         }
         if (barrageTimer % 3 == 0 && barrageSpot != null) {
