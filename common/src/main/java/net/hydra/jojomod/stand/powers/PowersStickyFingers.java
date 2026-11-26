@@ -43,6 +43,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -302,7 +303,9 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final byte ZIPPER_PICKUP_DROPPED_LIMB = PowerIndex.POWER_4_SNEAK_EXTRA;
     private static final int ZIPPER_PART_DURATION = 100;
 
-    private record ClientTagState(Level level, int zipperLevel, long expiresAt) {}
+    private record ClientTagState(Level level, int zipperLevel, long expiresAt, boolean forced) {}
+    /** Server -> client flag OR'd into the mark level: the marks belong to a forced Unzip Body (Zip Mode OFF). */
+    public static final int FORCED_MARK_FLAG = 1 << 10;
     private record ClientDismembermentState(Level level, int partMask, long expiresAt) {}
     private static final Map<Integer, ClientTagState> CLIENT_TAG_LEVELS = new ConcurrentHashMap<>();
     private static final Map<Integer, ClientDismembermentState> CLIENT_DISMEMBERMENT = new ConcurrentHashMap<>();
@@ -316,12 +319,21 @@ public class PowersStickyFingers extends NewPunchingStand {
         Minecraft minecraft = Minecraft.getInstance();
         Level level = minecraft.level;
         if (level == null) return;
+        boolean forced = (zipperLevel & FORCED_MARK_FLAG) != 0;
+        zipperLevel &= ~FORCED_MARK_FLAG;
         if (zipperLevel <= 0) {
             CLIENT_TAG_LEVELS.remove(entityId);
             return;
         }
         CLIENT_TAG_LEVELS.put(entityId,
-                new ClientTagState(level, zipperLevel, level.getGameTime() + TAG_DURATION));
+                new ClientTagState(level, zipperLevel, level.getGameTime() + TAG_DURATION, forced));
+    }
+
+    /** True while the marks on this entity come from a forced Unzip Body, so they render even with Zip Mode OFF. */
+    public static boolean isClientForcedTag(Entity entity) {
+        ClientTagState state = CLIENT_TAG_LEVELS.get(entity.getId());
+        return state != null && state.forced() && state.level() == entity.level()
+                && state.expiresAt() > entity.level().getGameTime();
     }
 
     public static int getClientTagLevel(Entity entity) {
@@ -844,8 +856,17 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (this.self.level().isClientSide()) return;
 
         Entity hit = MainUtil.rayCastEntity(this.self, 8.0F);
-        if (!(hit instanceof LivingEntity target) || target instanceof StandEntity || !isTagged(target)) {
+        if (!(hit instanceof LivingEntity target) || target instanceof StandEntity || target == this.self) {
             message("roundabout.zipper.not_tagged");
+            return;
+        }
+        if (!isTagged(target)) {
+            if (!areZipMarksEnabled()) {
+                // Zip Mode OFF: no marks needed, the stand pins the target and zips it open piece by piece.
+                startForcedUnzip(target);
+            } else {
+                message("roundabout.zipper.not_tagged");
+            }
             return;
         }
 
@@ -882,6 +903,164 @@ public class PowersStickyFingers extends NewPunchingStand {
         removeTag(target);
         this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
                 SoundSource.PLAYERS, 1.0F, 0.75F);
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // Forced Unzip Body (Zip Mode OFF)
+    // Unzip Body normally needs zipper marks (which only exist while Zip Mode is ON). With Zip Mode OFF the
+    // stand instead pins the target and barrages it with zippers one by one until the whole body is unzipped.
+    // Like the Zipper Barrage, the stand is anchored at the target and the user is free to walk away.
+    // ------------------------------------------------------------------------------------------------
+    /** Ticks of "binding" (first zipper locks the target) before the first body zipper opens. */
+    private static final int FORCED_UNZIP_BIND_TICKS = 10;
+    /** Ticks between each zipper being placed/opened on the target's body. */
+    private static final int FORCED_UNZIP_STEP_TICKS = 8;
+    /** Ticks between the last zipper opening and the final burst; the target glows during it. */
+    private static final int FORCED_UNZIP_FINISH_DELAY = 12;
+    private static final double FORCED_UNZIP_STAND_DISTANCE = 1.6D;
+    private static final int[] FORCED_UNZIP_PARTS = {
+            ZIPPER_PART_RIGHT_ARM, ZIPPER_PART_LEFT_ARM, ZIPPER_PART_RIGHT_LEG,
+            ZIPPER_PART_LEFT_LEG, ZIPPER_PART_HEAD };
+
+    private int forcedUnzipTargetId = -1;
+    private int forcedUnzipElapsed = 0;
+    private Vec3 forcedUnzipDir = null;
+
+    private void startForcedUnzip(LivingEntity target) {
+        if (!target.isAlive() || forcedUnzipTargetId != -1 || barrageTimer > 0
+                || this.getStandEntity(this.self) == null) return;
+        Vec3 away = this.self.position().subtract(target.position());
+        Vec3 flat = new Vec3(away.x, 0.0D, away.z);
+        if (flat.lengthSqr() < 1.0E-4D) {
+            float yaw = target.getYRot() * 0.017453292F;
+            flat = new Vec3(-Mth.sin(yaw), 0.0D, Mth.cos(yaw));
+        }
+        forcedUnzipDir = flat.normalize();
+        forcedUnzipTargetId = target.getId();
+        forcedUnzipElapsed = 0;
+
+        anchorForcedUnzipStand(target);
+        this.animateStand(StandEntity.BARRAGE);
+        playBarrageCrySound();
+        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
+                SoundSource.PLAYERS, 1.2F, 0.6F);
+        this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                SoundSource.PLAYERS, 1.2F, 0.5F);
+        // first zipper: the one that pins the target in place
+        syncTagLevel(target, FORCED_MARK_FLAG | 1);
+        if (this.self.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
+                    target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                    16, 0.35D, 0.45D, 0.35D, 0.04D);
+        }
+    }
+
+    /** Keeps the stand in front of the target in LOOSE mode, so it ignores the user's position and rotation. */
+    private void anchorForcedUnzipStand(LivingEntity target) {
+        StandEntity stand = this.getStandEntity(this.self);
+        if (stand == null || forcedUnzipDir == null) return;
+        double distance = FORCED_UNZIP_STAND_DISTANCE + target.getBbWidth() * 0.5D;
+        double middleY = target.getY() + target.getBbHeight() * 0.5D;
+        double y = Math.max(target.getY(), middleY - BARRAGE_WALL_STAND_LOWER);
+        //the stand looks at the target, i.e. against the direction it was placed in
+        float yaw = (float) (Mth.atan2(forcedUnzipDir.x, -forcedUnzipDir.z) * 57.29577951308232D);
+        this.poseStand(OffsetIndex.LOOSE);
+        stand.setPos(target.getX() + forcedUnzipDir.x * distance, y, target.getZ() + forcedUnzipDir.z * distance);
+        stand.setXRot(BARRAGE_WALL_STAND_PITCH);
+        stand.setYRot(yaw);
+        stand.setYBodyRot(yaw);
+    }
+
+    /** Pins the target: no walking, no AI pathing. It can still fall. */
+    private void lockForcedUnzipTarget(LivingEntity target) {
+        target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 6, 6, false, false));
+        Vec3 motion = target.getDeltaMovement();
+        target.setDeltaMovement(0.0D, Math.min(0.0D, motion.y), 0.0D);
+        target.hurtMarked = true;
+        if (target instanceof Mob mob) mob.getNavigation().stop();
+    }
+
+    private void tickForcedUnzip() {
+        Entity candidate = this.self.level().getEntity(forcedUnzipTargetId);
+        if (!(candidate instanceof LivingEntity target) || !target.isAlive() || !this.self.isAlive()
+                || target.level() != this.self.level() || this.getStandEntity(this.self) == null) {
+            endForcedUnzip();
+            return;
+        }
+        forcedUnzipElapsed++;
+        //other stand logic may try to pull the stand back to the user, so it is re-anchored every tick
+        anchorForcedUnzipStand(target);
+        lockForcedUnzipTarget(target);
+        if (forcedUnzipElapsed % 5 == 0) {
+            this.animateStand(StandEntity.BARRAGE);
+        }
+        if (forcedUnzipElapsed % 3 == 0) {
+            this.self.level().playSound(null, target.blockPosition(),
+                    ModSounds.STAND_BARRAGE_HIT_EVENT, SoundSource.PLAYERS, 0.8F,
+                    0.9F + this.self.getRandom().nextFloat() * 0.25F);
+        }
+
+        int sinceBind = forcedUnzipElapsed - FORCED_UNZIP_BIND_TICKS;
+        if (sinceBind >= 0 && sinceBind % FORCED_UNZIP_STEP_TICKS == 0
+                && sinceBind / FORCED_UNZIP_STEP_TICKS < FORCED_UNZIP_PARTS.length) {
+            placeForcedZipper(target, sinceBind / FORCED_UNZIP_STEP_TICKS);
+        }
+
+        int finishAt = FORCED_UNZIP_BIND_TICKS + FORCED_UNZIP_STEP_TICKS * FORCED_UNZIP_PARTS.length
+                + FORCED_UNZIP_FINISH_DELAY;
+        if (forcedUnzipElapsed == finishAt - FORCED_UNZIP_FINISH_DELAY) {
+            // short warning before the burst, same as the level 3 Unzip Body finisher
+            target.addEffect(new MobEffectInstance(MobEffects.GLOWING, FORCED_UNZIP_FINISH_DELAY, 0, false, true));
+            this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
+                    SoundSource.PLAYERS, 1.2F, 0.55F);
+        }
+        if (forcedUnzipElapsed >= finishAt) {
+            finishForcedUnzip(target);
+        }
+    }
+
+    /** Puts one more zipper on the body and opens the matching part (limb dismemberment). */
+    private void placeForcedZipper(LivingEntity target, int index) {
+        showDismemberedPart(target, FORCED_UNZIP_PARTS[index]);
+        StandDamageEntityAttack(target, 2.0F, 0.0F, this.self);
+        syncTagLevel(target, FORCED_MARK_FLAG | (index + 2));
+        if (this.self.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
+                    target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                    10, 0.35D, 0.45D, 0.35D, 0.04D);
+            serverLevel.sendParticles(ParticleTypes.CRIT,
+                    target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                    5, 0.25D, 0.35D, 0.25D, 0.08D);
+        }
+        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
+                SoundSource.PLAYERS, 0.9F, 0.7F + index * 0.1F);
+    }
+
+    private void finishForcedUnzip(LivingEntity target) {
+        //every part is already open by now; this is a safety net in case one was skipped
+        applyDismembermentForLevel(target, TAG_MAX_LEVEL);
+        float finisherDamage = Math.max(26.0F, getHeavyPunchStrength(target) * 4.5F);
+        StandDamageEntityAttack(target, finisherDamage, 0.0F, this.self);
+        if (this.self.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
+                    target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+                    48, 0.65D, 0.8D, 0.65D, 0.08D);
+        }
+        this.self.level().playSound(null, target.blockPosition(), SoundEvents.IRON_TRAPDOOR_CLOSE,
+                SoundSource.PLAYERS, 1.5F, 0.5F);
+        endForcedUnzip();
+    }
+
+    private void endForcedUnzip() {
+        if (forcedUnzipTargetId != -1 && this.self.level() instanceof ServerLevel serverLevel
+                && serverLevel.getEntity(forcedUnzipTargetId) instanceof LivingEntity target) {
+            syncTagLevel(target, 0);
+        }
+        forcedUnzipTargetId = -1;
+        forcedUnzipElapsed = 0;
+        forcedUnzipDir = null;
+        //back to following the user: pose FOLLOW + idle animation
+        this.setPowerNone();
     }
 
     private void startDisassemble() {
@@ -1793,6 +1972,9 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (disassembleTicks > 0 && --disassembleTicks <= 0) endDisassemble();
         if (!this.self.level().isClientSide() && barrageTimer > 0) {
             tickBarrageAnimation();
+        }
+        if (!this.self.level().isClientSide() && forcedUnzipTargetId != -1) {
+            tickForcedUnzip();
         }
         if (!this.self.level().isClientSide() && this.self.tickCount % 100 == 0 && !tags.isEmpty()) {
             long now = this.self.level().getGameTime();

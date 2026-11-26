@@ -1442,7 +1442,7 @@
   "ability.roundabout.zipper_fist": "Punho de Zíper",
   "ability.roundabout.zipper_fist.desc": "Pressione Habilidade 2 para preparar o punho; clique esquerdo para lançá-lo ou direito para cancelar. Com a marcação ativada, acertar um alvo adiciona uma marca. Se o punho prender em um bloco, use Habilidade 3 para ser puxado até ele.",
   "ability.roundabout.zipper_release": "Unzip Body",
-  "ability.roundabout.zipper_release.desc": "Consome as marcas do alvo e causa dano. Nível 1 abre os dois braços; nível 2 também abre as pernas; nível 3 também abre a cabeça e inicia um golpe final após um breve aviso.",
+  "ability.roundabout.zipper_release.desc": "Consome as marcas do alvo e causa dano. Nível 1 abre os dois braços; nível 2 também abre as pernas; nível 3 também abre a cabeça e inicia um golpe final após um breve aviso. Com o Zip Mode DESLIGADO não são necessárias marcas: o stand prende o alvo em um zíper e o enche de zíperes aos poucos até o corpo inteiro ser aberto, terminando em um golpe final pesado. O stand fica no alvo, então você pode se afastar.",
   "ability.roundabout.zipper_limb_panel": "Selecionar partes para Unzip",
   "ability.roundabout.zipper_limb_panel.desc": "Agachar + Habilidade 4 abre um painel para escolher uma ou mais partes do alvo vivo na mira. A seleção não exige marcas nem causa dano; o próximo ataque Unzip remove as partes selecionadas.",
   "ability.roundabout.zipper_unzip": "Zíper",

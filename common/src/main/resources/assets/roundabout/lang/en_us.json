@@ -3212,7 +3212,7 @@
   "ability.roundabout.zipper_fist": "Fist Launch",
   "ability.roundabout.zipper_fist.desc": "Press Skill 2 to prime the fist, left click to launch it, or right click to cancel. With Toggle Zip enabled, hitting a target adds one zipper level and pulls it slightly toward you. A fist stuck in a block can be used with Skill 3 to pull yourself to it.",
   "ability.roundabout.zipper_release": "Unzip Body",
-  "ability.roundabout.zipper_release.desc": "Consumes zipper marks on the targeted entity. Level 1 unzips both arms, level 2 also unzips both legs, and level 3 also unzips the head. Each unzip deals damage; at level 3, the target glows during a short warning before a heavy finisher.",
+  "ability.roundabout.zipper_release.desc": "Consumes zipper marks on the targeted entity. Level 1 unzips both arms, level 2 also unzips both legs, and level 3 also unzips the head. Each unzip deals damage; at level 3, the target glows during a short warning before a heavy finisher. With Zip Mode OFF, no marks are needed: your stand pins the target in a zipper and barrages it with zippers one by one until its whole body is unzipped, ending in a heavy finisher. The stand stays on the target, so you are free to walk away.",
   "ability.roundabout.zipper_disassemble": "Disassemble",
   "ability.roundabout.zipper_disassemble.desc": "Briefly turns you invisible and invulnerable to dodge incoming attacks. (Temporary implementation; the separated body parts and healing restriction are not implemented yet.)",
   "ability.roundabout.zipper_ride": "Fist Grapple",

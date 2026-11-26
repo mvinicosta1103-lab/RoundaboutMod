@@ -28,7 +28,7 @@ public final class ZipperBodyOverlayRenderer {
         Minecraft minecraft = Minecraft.getInstance();
         if (!(minecraft.player instanceof StandUser user)
                 || !(user.roundabout$getStandPowers() instanceof PowersStickyFingers powers)
-                || !powers.areZipMarksEnabled()
+                || (!powers.areZipMarksEnabled() && !PowersStickyFingers.isClientForcedTag(target))
                 || minecraft.player.distanceToSqr(target) > 32.0D * 32.0D) return;
 
         int level = PowersStickyFingers.getClientTagLevel(target);
