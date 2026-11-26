@@ -201,13 +201,41 @@ public class PowersStickyFingers extends NewPunchingStand {
     }
 
     public void unzipClient() {
-        if (isInZipperDimension(this.self) || !this.onCooldown(PowerIndex.SKILL_1)) {
+        // aiming at one of your open portals closes it, even while Unzip is on cooldown
+        if (isInZipperDimension(this.self) || !this.onCooldown(PowerIndex.SKILL_1)
+                || findAimedOpenPortal() != null) {
             this.tryPower(UNZIP, true);
             tryPowerPacket(UNZIP);
         }
     }
 
+    /** The owner's open portal the user is looking straight at, or null. */
+    private ZipperEntity findAimedOpenPortal() {
+        if (isInZipperDimension(this.self)) return null;
+        Vec3 eye = this.self.getEyePosition();
+        Vec3 end = eye.add(this.self.getViewVector(1.0F).scale(UNZIP_RANGE));
+        ZipperEntity best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (ZipperEntity zipper : this.self.level().getEntitiesOfClass(ZipperEntity.class,
+                new AABB(eye, end).inflate(2.0D), z -> z.isOpenPortal() && z.isOwner(this.self))) {
+            AABB box = zipper.getPortalAimBox();
+            java.util.Optional<Vec3> hit = box.clip(eye, end);
+            double distance = hit.isPresent() ? eye.distanceToSqr(hit.get()) : box.contains(eye) ? 0.0D : -1.0D;
+            if (distance >= 0.0D && distance < bestDistance) {
+                best = zipper;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
     private void startUnzip() {
+        // Closing an open portal ignores the cooldown and does not start a new one.
+        ZipperEntity aimedPortal = findAimedOpenPortal();
+        if (aimedPortal != null) {
+            if (!this.self.level().isClientSide()) aimedPortal.forceClosePortal();
+            return;
+        }
         boolean insideZipperDimension = isInZipperDimension(this.self);
         double range = insideZipperDimension ? ZIPPER_DIMENSION_EXIT_RANGE : UNZIP_RANGE;
         HitResult hit = this.self.pick(range, 1.0F, false);
@@ -2014,11 +2042,11 @@ public class PowersStickyFingers extends NewPunchingStand {
         boolean sneaking = isHoldingSneak();
 
         if (guarding) {
-            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_STORAGE, PowerIndex.SKILL_1_GUARD);
+            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_STORAGE_SKILL, PowerIndex.SKILL_1_GUARD);
         } else if (sneaking) {
-            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_1_SNEAK);
+            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_ZIPPER_BARRAGE_SKILL, PowerIndex.SKILL_1_SNEAK);
         } else {
-            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_1);
+            setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP_SKILL, PowerIndex.SKILL_1);
         }
 
         if (guarding) {
@@ -2026,11 +2054,11 @@ public class PowersStickyFingers extends NewPunchingStand {
         } else if (sneaking) {
             setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_2_SNEAK);
         } else {
-            setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST, PowerIndex.SKILL_2);
+            setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST_LAUNCH_SKILL, PowerIndex.SKILL_2);
         }
 
         if (guarding) {
-            setSkillIcon(context, x, y, 3, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_3_GUARD);
+            setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_ZIP_SKILL, PowerIndex.SKILL_3_GUARD);
         } else if (sneaking) {
             setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_3);
         } else {
@@ -2063,21 +2091,21 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c0, r2, 0, "ability.roundabout.sticky_kick",
                 "instruction.roundabout.press_attack_crouch", StandIcons.KING_CRIMSON_FINAL_PUNCH, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r0, 0, "ability.roundabout.barrage",
-                "instruction.roundabout.barrage", StandIcons.STICKY_FINGERS_BARRAGE, 0, level, bypass));
+                "instruction.roundabout.barrage", StandIcons.STICKY_FINGERS_BARRAGE_SKILL, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r1, 0, "ability.roundabout.mining",
                 "instruction.roundabout.hold_attack", StandIcons.KING_CRIMSON_MINING, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r2, 0, "ability.roundabout.zipper_limb_graft",
                 "instruction.roundabout.right_click", StandIcons.STICKY_FINGERS_LIMB_GRAFT, 0, level, bypass));
 
         list.add(drawSingleGUIIcon(context, 18, c2, r0, 0, "ability.roundabout.zipper_unzip",
-                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_UNZIP, 1, level, bypass));
+                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_UNZIP_SKILL, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r1, 0, "ability.roundabout.zipper_mass",
-                "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_MASS, 1, level, bypass));
+                "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_BARRAGE_SKILL, 1, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c2, r2, 0, "ability.roundabout.zipper_storage",
-                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_ZIPPER_STORAGE, 1, level, bypass));
+                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_ZIPPER_STORAGE_SKILL, 1, level, bypass));
 
         list.add(drawSingleGUIIcon(context, 18, c3, r0, 0, "ability.roundabout.zipper_fist",
-                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST, 2, level, bypass));
+                "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST_LAUNCH_SKILL, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r1, 0, "ability.roundabout.zipper_release",
                 "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_MASS, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r2, 0, "ability.roundabout.zipper_disassemble",
@@ -2088,8 +2116,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c4, r1, 0, "ability.roundabout.zipper_latch",
                 "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_UNZIP, 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c4, r2, 0, "ability.roundabout.zipper_toggle",
-                "instruction.roundabout.press_skill_block", areZipMarksEnabled()
-                        ? StandIcons.STICKY_FINGERS_ZIPPER_MASS : StandIcons.KING_CRIMSON_HANDS_ACTIVE,
+                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_ZIP_SKILL,
                 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c5, r0, 0, "ability.roundabout.vault_kc",
                 "instruction.roundabout.press_skill_air", StandIcons.STICKY_FINGERS_VAULT, 3, level, bypass));

@@ -33,6 +33,14 @@ public class ZipperSpaceBlockEntity extends BlockEntity {
         this.setChanged();
     }
 
+    /** Makes the tunnel block restore sooner (used when the owner closes the portal by hand). */
+    public void closeSoon(int ticks) {
+        if (this.ticksLeft > ticks) {
+            this.ticksLeft = Math.max(0, ticks);
+            this.setChanged();
+        }
+    }
+
     public BlockState getOriginal() {
         return original;
     }

@@ -705,6 +705,18 @@ public class StandIcons {
             "textures/gui/icons/sticky_fingers/limb_graft.png");
     public static final ResourceLocation STICKY_FINGERS_POLE_COLLAPSE = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/sticky_fingers/pole_collapse.png");
+    public static final ResourceLocation STICKY_FINGERS_UNZIP_SKILL = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/unzip_skill.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIPPER_BARRAGE_SKILL = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zipper_barrage_skill.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIPPER_STORAGE_SKILL = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zipper_storage_skill.png");
+    public static final ResourceLocation STICKY_FINGERS_FIST_LAUNCH_SKILL = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/fist_launch_skill.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIP_SKILL = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zip_skill.png");
+    public static final ResourceLocation STICKY_FINGERS_BARRAGE_SKILL = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/barrage_skill.png");
 
     public static final ResourceLocation MANDOM_VISION_ON = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/mandom/vision_on.png");

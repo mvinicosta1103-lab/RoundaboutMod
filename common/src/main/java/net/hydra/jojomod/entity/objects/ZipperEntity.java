@@ -752,6 +752,40 @@ public class ZipperEntity extends Entity {
         sparkBurst(this.position().add(0.0D, 0.5D, 0.0D), 10);
     }
 
+    /** True while this zipper is an open (or opening) passage the owner can close: not storage, not mini. */
+    public boolean isOpenPortal() {
+        if (this.isRemoved() || this instanceof ZipperStorageEntity || isMini()) {
+            return false;
+        }
+        int state = getState();
+        return state == STATE_TUNNEL || state == STATE_OPENING;
+    }
+
+    /** Area the owner has to aim at to close the portal by hand. */
+    public AABB getPortalAimBox() {
+        return getBoundingBox().inflate(0.3D);
+    }
+
+    /**
+     * Closes an open portal right now, ignoring the remaining tunnel time. The tunnel blocks keep their own restore
+     * timer, so they are shortened to the zipper's closing animation; otherwise the passage would stay open.
+     */
+    public boolean forceClosePortal() {
+        if (this.level().isClientSide() || !isOpenPortal()) {
+            return false;
+        }
+        if (this.level() instanceof ServerLevel serverLevel) {
+            //computed before close() so the whole connected group is still found
+            for (BlockPos pos : computeMergedTunnel()) {
+                if (serverLevel.getBlockEntity(pos) instanceof ZipperSpaceBlockEntity space) {
+                    space.closeSoon(CLOSE_ANIM_TICKS);
+                }
+            }
+        }
+        close();
+        return true;
+    }
+
     private void startOpening(int action) {
         List<ZipperEntity> group = getUnzipGroup();
         if (group.stream().anyMatch(zipper -> zipper.getState() != STATE_NEUTRAL)) {
