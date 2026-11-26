@@ -131,6 +131,7 @@ public class ZipperEntity extends Entity {
     private float savedFlyingSpeed = 0.05F;
     private boolean savedAbilities;
     private MobEffectInstance savedSpeedEffect;
+    private boolean savedWasSwimming;
 
     public ZipperEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -808,7 +809,9 @@ public class ZipperEntity extends Entity {
         owner.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 40, 0, false, false, false));
         MobEffectInstance existingSpeed = owner.getEffect(MobEffects.MOVEMENT_SPEED);
         savedSpeedEffect = existingSpeed == null ? null : new MobEffectInstance(existingSpeed);
-        owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 1, false, false, false));
+        savedWasSwimming = owner.isSwimming();
+        owner.setSwimming(true);
+        owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 2, false, false, false));
         if (!level().isClientSide() && owner instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             var abilities = serverPlayer.getAbilities();
             savedMayfly = abilities.mayfly;
@@ -835,11 +838,13 @@ public class ZipperEntity extends Entity {
             endHiding(owner);
             return;
         }
+        owner.setSwimming(true);
+        applyZipperGlide(owner);
         if (!owner.hasEffect(MobEffects.INVISIBILITY) || owner.getEffect(MobEffects.INVISIBILITY).getDuration() < 10) {
             owner.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 40, 0, false, false, false));
         }
         if (!owner.hasEffect(MobEffects.MOVEMENT_SPEED) || owner.getEffect(MobEffects.MOVEMENT_SPEED).getDuration() < 10) {
-            owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 1, false, false, false));
+            owner.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 40, 2, false, false, false));
         }
         if (owner.getHealth() > lastHealth) {
             owner.setHealth(lastHealth);
@@ -867,6 +872,40 @@ public class ZipperEntity extends Entity {
         }
     }
 
+    /** Applies a short, inertial slide while the owner is hidden in the zipper. */
+    private void applyZipperGlide(Player owner) {
+        if (this.level().isClientSide() && owner != ClientUtil.getPlayer()) return;
+
+        float inputX = owner.xxa;
+        float inputZ = owner.zza;
+        float inputLength = (float) Math.sqrt(inputX * inputX + inputZ * inputZ);
+        if (inputLength > 1.0F) {
+            inputX /= inputLength;
+            inputZ /= inputLength;
+        }
+
+        Vec3 velocity = owner.getDeltaMovement();
+        Vec3 horizontal = new Vec3(velocity.x, 0.0D, velocity.z);
+        Vec3 nextHorizontal;
+        if (inputLength > 0.01F) {
+            double yaw = Math.toRadians(owner.getYRot());
+            double sin = Math.sin(yaw);
+            double cos = Math.cos(yaw);
+            Vec3 direction = new Vec3(inputX * cos - inputZ * sin, 0.0D,
+                    inputZ * cos + inputX * sin).normalize();
+            Vec3 desired = direction.scale(0.34D);
+            nextHorizontal = horizontal.lerp(desired, 0.28D);
+        } else {
+            // Keep a little momentum after the player lets go, then ease to a stop.
+            nextHorizontal = horizontal.scale(0.78D);
+        }
+
+        double speed = nextHorizontal.horizontalDistance();
+        if (speed > 0.34D) nextHorizontal = nextHorizontal.scale(0.34D / speed);
+        owner.setDeltaMovement(nextHorizontal.x, velocity.y, nextHorizontal.z);
+        if (!this.level().isClientSide()) owner.hurtMarked = true;
+    }
+
     private void endHiding(Player owner) {
         if (owner != null) {
             if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(false);
@@ -874,6 +913,7 @@ public class ZipperEntity extends Entity {
             owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             owner.removeEffect(MobEffects.JUMP);
             owner.removeEffect(MobEffects.MOVEMENT_SPEED);
+            owner.setSwimming(savedWasSwimming);
             if (savedSpeedEffect != null) {
                 owner.addEffect(new MobEffectInstance(savedSpeedEffect));
             }
@@ -921,6 +961,7 @@ public class ZipperEntity extends Entity {
         owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
         owner.removeEffect(MobEffects.JUMP);
         owner.removeEffect(MobEffects.MOVEMENT_SPEED);
+        owner.setSwimming(false);
     }
 
     public static boolean canZip(Level level, BlockPos pos) {
@@ -1282,6 +1323,13 @@ public class ZipperEntity extends Entity {
     public void tick() {
         super.tick();
         if (this.level().isClientSide()) {
+            if (getState() == STATE_HIDING) {
+                Player owner = getOwnerPlayer();
+                if (owner != null && owner == ClientUtil.getPlayer()) {
+                    owner.setSwimming(true);
+                    applyZipperGlide(owner);
+                }
+            }
             tickClientParticles();
             return;
         }
