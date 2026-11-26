@@ -297,11 +297,15 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (!target.isAlive() || target instanceof StandEntity) return;
         addTag(target);
         int level = Math.max(1, getTagLevel(target));
-        float damage = applyZipModeDamage(this.self, 2.0F + level * 2.0F);
-        if (target.hurt(ModDamageTypes.of(target.level(), ModDamageTypes.STAND, this.self), damage)) {
+        float damage = getUnzipBodyDamageLimit(target);
+        float dealt = applyUnzipBodyDamage(target, damage, damage);
+        boolean hit = damage <= 0.0F || dealt > 0.0F;
+        if (hit) {
             applyDismembermentForLevel(target, level);
             applyConfiguredAttackDismemberment(target);
-            target.knockback(0.25D, this.self.getX() - target.getX(), this.self.getZ() - target.getZ());
+            if (dealt > 0.0F) {
+                target.knockback(0.25D, this.self.getX() - target.getX(), this.self.getZ() - target.getZ());
+            }
         }
         if (this.self.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
@@ -310,6 +314,27 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
                 SoundSource.PLAYERS, 1.0F, 0.75F + level * 0.08F);
+    }
+
+    /** Caps one Unzip Body activation at 35% max health and preserves a 50% health floor. */
+    private float getUnzipBodyDamageLimit(LivingEntity target) {
+        float maxHealth = target.getMaxHealth();
+        float floor = maxHealth * 0.50F;
+        float roomAboveFloor = Math.max(0.0F, target.getHealth() - floor);
+        return Math.min(maxHealth * 0.35F, roomAboveFloor);
+    }
+
+    /** Applies part of a cumulative Unzip Body budget, never crossing the half-health floor. */
+    private float applyUnzipBodyDamage(LivingEntity target, float requested, float budgetRemaining) {
+        if (!target.isAlive() || requested <= 0.0F || budgetRemaining <= 0.0F) return 0.0F;
+        float damage = Math.min(Math.min(requested, budgetRemaining), getUnzipBodyDamageLimit(target));
+        if (damage <= 0.0F || !target.hurt(
+                ModDamageTypes.of(target.level(), ModDamageTypes.STAND, this.self), damage)) {
+            return 0.0F;
+        }
+        float floor = target.getMaxHealth() * 0.50F;
+        if (target.isAlive() && target.getHealth() < floor) target.setHealth(floor);
+        return damage;
     }
 
     private void message(String key) {
@@ -606,6 +631,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     private int maxReleaseTicks;
     private int maxReleaseTargetId = -1;
     private int maxReleaseLevel;
+    private float maxReleaseDamageRemaining;
     private int disassembleTicks;
     private boolean wasInvulnerable;
     private boolean wasInvisible;
@@ -903,6 +929,7 @@ public class PowersStickyFingers extends NewPunchingStand {
             maxReleaseTargetId = target.getId();
             maxReleaseLevel = level;
             maxReleaseTicks = MAX_RELEASE_WINDUP;
+            maxReleaseDamageRemaining = getUnzipBodyDamageLimit(target);
             target.addEffect(new MobEffectInstance(MobEffects.GLOWING, MAX_RELEASE_WINDUP, 0, false, true));
             this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
                     SoundSource.PLAYERS, 1.2F, 0.55F);
@@ -914,8 +941,9 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private void releaseZippersOn(LivingEntity target, int level) {
         if (!target.isAlive()) return;
-        float damage = 4.0F + level * 1.65F;
-        if (StandDamageEntityAttack(target, damage, 0.25F, this.self)) {
+        float damage = getUnzipBodyDamageLimit(target);
+        float dealt = applyUnzipBodyDamage(target, damage, damage);
+        if (damage <= 0.0F || dealt > 0.0F) {
             applyDismembermentForLevel(target, level);
             int duration = 30 + level * 12;
             target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration,
@@ -953,6 +981,7 @@ public class PowersStickyFingers extends NewPunchingStand {
     private int forcedUnzipTargetId = -1;
     private int forcedUnzipElapsed = 0;
     private Vec3 forcedUnzipDir = null;
+    private float forcedUnzipDamageRemaining;
 
     private void startForcedUnzip(LivingEntity target) {
         if (!target.isAlive() || forcedUnzipTargetId != -1 || barrageTimer > 0
@@ -966,6 +995,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         forcedUnzipDir = flat.normalize();
         forcedUnzipTargetId = target.getId();
         forcedUnzipElapsed = 0;
+        forcedUnzipDamageRemaining = getUnzipBodyDamageLimit(target);
 
         anchorForcedUnzipStand(target);
         this.animateStand(StandEntity.BARRAGE);
@@ -1050,7 +1080,9 @@ public class PowersStickyFingers extends NewPunchingStand {
     /** Puts one more zipper on the body and opens the matching part (limb dismemberment). */
     private void placeForcedZipper(LivingEntity target, int index) {
         showDismemberedPart(target, FORCED_UNZIP_PARTS[index]);
-        StandDamageEntityAttack(target, 2.0F, 0.0F, this.self);
+        int pulsesLeft = FORCED_UNZIP_PARTS.length - index;
+        float pulseDamage = forcedUnzipDamageRemaining / pulsesLeft;
+        forcedUnzipDamageRemaining -= applyUnzipBodyDamage(target, pulseDamage, forcedUnzipDamageRemaining);
         syncTagLevel(target, FORCED_MARK_FLAG | (index + 2));
         if (this.self.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
@@ -1067,8 +1099,8 @@ public class PowersStickyFingers extends NewPunchingStand {
     private void finishForcedUnzip(LivingEntity target) {
         //every part is already open by now; this is a safety net in case one was skipped
         applyDismembermentForLevel(target, TAG_MAX_LEVEL);
-        float finisherDamage = Math.max(26.0F, getHeavyPunchStrength(target) * 4.5F);
-        StandDamageEntityAttack(target, finisherDamage, 0.0F, this.self);
+        // The final pose is cosmetic; Unzip Body is capped and nonlethal.
+
         if (this.self.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
                     target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
@@ -1087,6 +1119,7 @@ public class PowersStickyFingers extends NewPunchingStand {
         forcedUnzipTargetId = -1;
         forcedUnzipElapsed = 0;
         forcedUnzipDir = null;
+        forcedUnzipDamageRemaining = 0.0F;
         //back to following the user: pose FOLLOW + idle animation
         this.setPowerNone();
     }
@@ -1962,12 +1995,12 @@ public class PowersStickyFingers extends NewPunchingStand {
                     maxReleaseTicks = 0;
                     maxReleaseTargetId = -1;
                     maxReleaseLevel = 0;
+                    maxReleaseDamageRemaining = 0.0F;
                 } else if (--maxReleaseTicks <= 0) {
-                    float finisherDamage = Math.max(26.0F, getHeavyPunchStrength(target) * 4.5F);
-                    StandDamageEntityAttack(target, finisherDamage, 0.0F, this.self);
                     applyDismembermentForLevel(target, maxReleaseLevel);
                     removeTag(target);
                     maxReleaseLevel = 0;
+                    maxReleaseDamageRemaining = 0.0F;
                     if (this.self.level() instanceof ServerLevel serverLevel) {
                         serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
                                 target.getX(), target.getY() + target.getBbHeight() * 0.5D,
@@ -1984,7 +2017,10 @@ public class PowersStickyFingers extends NewPunchingStand {
                     if (openedPartIndex >= 0 && openedPartIndex < partCount) {
                         showDismemberedPart(target, zipperParts[openedPartIndex]);
                     }
-                    StandDamageEntityAttack(target, 2.0F, 0.0F, this.self);
+                    int pulsesLeft = Math.max(1, (maxReleaseLevel >= 3 ? 5 : maxReleaseLevel >= 2 ? 4 : 2)
+                            - Math.max(0, openedPartIndex));
+                    float pulseDamage = maxReleaseDamageRemaining / pulsesLeft;
+                    maxReleaseDamageRemaining -= applyUnzipBodyDamage(target, pulseDamage, maxReleaseDamageRemaining);
                     if (this.self.level() instanceof ServerLevel serverLevel) {
                         serverLevel.sendParticles(ModParticles.ZIPPER_SPARK,
                                 target.getX(), target.getY() + target.getBbHeight() * 0.5D,
