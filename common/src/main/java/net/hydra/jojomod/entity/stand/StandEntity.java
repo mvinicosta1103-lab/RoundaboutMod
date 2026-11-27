@@ -1,5 +1,7 @@
 package net.hydra.jojomod.entity.stand;
 
+import net.hydra.jojomod.block.ZipperSpaceBlock;
+import net.hydra.jojomod.block.ZipperSpaceBlockEntity;
 import net.hydra.jojomod.access.IGravityEntity;
 import net.hydra.jojomod.access.ILivingEntityAccess;
 import net.hydra.jojomod.access.NoVibrationEntity;
@@ -971,7 +973,39 @@ public abstract class StandEntity extends Mob implements NoVibrationEntity {
             }
         //this.noClip = false;
         this.setNoGravity(!standHasGravity());
+        // Most stands have no physics and can pass through the passage without
+        // triggering block collision callbacks. Enforce the rule every server tick.
+        if (!this.level().isClientSide()) {
+            ejectFromZipperPassage();
+        }
     } // Happens every tick
+
+    private void ejectFromZipperPassage() {
+        AABB bounds = this.getBoundingBox().inflate(0.05D);
+        BlockPos min = BlockPos.containing(bounds.minX, bounds.minY, bounds.minZ);
+        BlockPos max = BlockPos.containing(bounds.maxX, bounds.maxY, bounds.maxZ);
+        for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
+            if (!(this.level().getBlockState(pos).getBlock() instanceof ZipperSpaceBlock)
+                    || !(this.level().getBlockEntity(pos) instanceof ZipperSpaceBlockEntity space)) {
+                continue;
+            }
+
+            Direction face = space.getEntranceFace();
+            BlockPos mouth = pos;
+            for (int i = 0; i < 8
+                    && this.level().getBlockState(mouth).getBlock() instanceof ZipperSpaceBlock; i++) {
+                mouth = mouth.relative(face);
+            }
+            double x = mouth.getX() + 0.5D + face.getStepX() * (this.getBbWidth() * 0.5D + 0.15D);
+            double y = face == Direction.UP ? mouth.getY()
+                    : face == Direction.DOWN ? mouth.getY() - this.getBbHeight() : mouth.getY();
+            double z = mouth.getZ() + 0.5D + face.getStepZ() * (this.getBbWidth() * 0.5D + 0.15D);
+            this.teleportTo(x, y, z);
+            this.setDeltaMovement(Vec3.ZERO);
+            this.hurtMarked = true;
+            return;
+        }
+    }
 
 
     public boolean standHasGravity(){

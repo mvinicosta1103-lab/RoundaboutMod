@@ -8,6 +8,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
 
 public class StickyFingersEntity extends FollowingStandEntity {
+    private static final float MAX_ZIPPER_EXTENSION_BLOCKS = 14.0F;
     private float zipperExtensionLength;
     private float oldZipperExtensionLength;
 
@@ -31,7 +32,9 @@ public class StickyFingersEntity extends FollowingStandEntity {
                     .findFirst()
                     .orElse(null);
             if (fist != null) {
-                targetLength = (float) Math.max(0.0D, Math.min(15.0D, this.distanceTo(fist)) - 0.7D);
+                // Use the projectile's real travel distance, not the offset stand position.
+                targetLength = Mth.clamp(fist.getFlightDistance() - 0.35F,
+                        0.0F, MAX_ZIPPER_EXTENSION_BLOCKS);
             }
         }
 
@@ -60,6 +63,11 @@ public class StickyFingersEntity extends FollowingStandEntity {
     public final AnimationState zipperFistPrepare = new AnimationState();
     public final AnimationState zipperFistIdle = new AnimationState();
     public final AnimationState zipperFistImpact = new AnimationState();
+    public final AnimationState zipperPoleCollapse = new AnimationState();
+    public final AnimationState guillotinePunch = new AnimationState();
+    public final AnimationState guillotineChop = new AnimationState();
+    public final AnimationState guillotineFull = new AnimationState();
+    public final AnimationState deathByDisassembly = new AnimationState();
     public final AnimationState hideFists = new AnimationState();
     public final AnimationState impale = new AnimationState();
     public final AnimationState impale2 = new AnimationState();
@@ -80,6 +88,11 @@ public class StickyFingersEntity extends FollowingStandEntity {
             ZIPPER_FIST_PREPARE = 88,
             ZIPPER_FIST_IDLE = 89,
             ZIPPER_FIST_IMPACT = 90,
+            ZIPPER_POLE_COLLAPSE = 100,
+            GUILLOTINE_PUNCH = 101,
+            GUILLOTINE_CHOP = 102,
+            GUILLOTINE_FULL = 103,
+            DEATH_BY_DISASSEMBLY = 104,
             BLOOD_SPLASH_WINDUP = 50,
             BLOOD_SPLASH_THROW = 51;
     @Override
@@ -182,6 +195,31 @@ public class StickyFingersEntity extends FollowingStandEntity {
             this.zipperFistImpact.startIfStopped(this.tickCount);
         } else {
             this.zipperFistImpact.stop();
+        }
+        if (animation == ZIPPER_POLE_COLLAPSE) {
+            this.zipperPoleCollapse.startIfStopped(this.tickCount);
+        } else {
+            this.zipperPoleCollapse.stop();
+        }
+        if (animation == GUILLOTINE_PUNCH) {
+            this.guillotinePunch.startIfStopped(this.tickCount);
+        } else {
+            this.guillotinePunch.stop();
+        }
+        if (animation == GUILLOTINE_CHOP) {
+            this.guillotineChop.startIfStopped(this.tickCount);
+        } else {
+            this.guillotineChop.stop();
+        }
+        if (animation == GUILLOTINE_FULL) {
+            this.guillotineFull.startIfStopped(this.tickCount);
+        } else {
+            this.guillotineFull.stop();
+        }
+        if (animation == DEATH_BY_DISASSEMBLY) {
+            this.deathByDisassembly.startIfStopped(this.tickCount);
+        } else {
+            this.deathByDisassembly.stop();
         }
     }
 

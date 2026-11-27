@@ -1,4 +1,13 @@
 {
+  "sf_heavy_hit": {"subtitle": "sounds.roundabout.sf_heavy_hit", "sounds": ["roundabout:sf_heavy_hit"]},
+  "bruno_ari": {"subtitle": "sounds.roundabout.bruno_ari", "sounds": ["roundabout:bruno_ari"]},
+  "sf_hit_1": {"subtitle": "sounds.roundabout.sf_hit_1", "sounds": ["roundabout:sf_hit_1"]},
+  "sf_hit_2": {"subtitle": "sounds.roundabout.sf_hit_2", "sounds": ["roundabout:sf_hit_2"]},
+  "sf_hit_3": {"subtitle": "sounds.roundabout.sf_hit_3", "sounds": ["roundabout:sf_hit_3"]},
+  "sf_hit_4": {"subtitle": "sounds.roundabout.sf_hit_4", "sounds": ["roundabout:sf_hit_4"]},
+  "sf_zipper_break": {"subtitle": "sounds.roundabout.sf_zipper_break", "sounds": ["roundabout:sf_zipper_break"]},
+  "sf_hit_zipper": {"subtitle": "sounds.roundabout.sf_hit_zipper", "sounds": ["roundabout:sf_hit_zipper"]},
+  "sf_summon": {"subtitle": "sounds.roundabout.sf_summon", "sounds": ["roundabout:sf_summon"]},
   "summon_sound": {
     "subtitle": "sounds.roundabout.summon_stand",
     "sounds": [

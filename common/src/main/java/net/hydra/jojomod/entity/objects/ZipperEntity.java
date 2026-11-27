@@ -12,6 +12,7 @@ import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.event.powers.StandUser;
 import net.hydra.jojomod.access.IStickyFingersDismemberment;
 import net.hydra.jojomod.stand.powers.PowersStickyFingers;
+import net.hydra.jojomod.sound.ModSounds;
 import net.hydra.jojomod.util.MainUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -84,12 +85,11 @@ public class ZipperEntity extends Entity {
     private static final int LATCH_READY_TICKS = 400;
     private static final int LATCH_RIDE_TICKS = 20;
 
-    public static final int TUNNEL_DEPTH_WALL = 5;
-    public static final int TUNNEL_DEPTH_FLOOR = 6;
+    public static final int TUNNEL_DEPTH_WALL = 4;
+    public static final int TUNNEL_DEPTH_FLOOR = 4;
     public static final int MAX_SWALLOWED = 3;
     public static final double ZIPPER_LINK_DISTANCE = 3.0D;
     private static final int MAX_CONNECTED_ZIPPERS = 64;
-    private static final int MAX_MERGED_TUNNEL_BLOCKS = 512;
 
     protected static final EntityDataAccessor<Integer> STATE = SynchedEntityData.defineId(ZipperEntity.class,
             EntityDataSerializers.INT);
@@ -112,6 +112,7 @@ public class ZipperEntity extends Entity {
     protected int stateTicks = 0;
     private int mineDelay = 0;
     private int biteTick = -1;
+    private boolean vanishOnMine = false;
     private int pendingOpenAction = 0;
     private UUID pendingCapture = null;
     private boolean retainAfterClose = false;
@@ -174,10 +175,20 @@ public class ZipperEntity extends Entity {
     }
 
     public void startMining(int appearDelay, int mineTicks) {
+        startMining(appearDelay, mineTicks, false);
+    }
+
+    /** Barrage zippers break their block exactly as the opening animation finishes, then vanish. */
+    public void startSynchronizedMining(int appearDelay) {
+        startMining(appearDelay, 0, true);
+    }
+
+    private void startMining(int appearDelay, int mineTicks, boolean vanishOnMine) {
         setState(STATE_MINING);
         this.entityData.set(STATE_START, this.tickCount + appearDelay);
         this.mineDelay = appearDelay + OPEN_ANIM_TICKS + mineTicks;
         this.biteTick = appearDelay + OPEN_ANIM_TICKS;
+        this.vanishOnMine = vanishOnMine;
     }
 
     @Override
@@ -748,8 +759,8 @@ public class ZipperEntity extends Entity {
         }
         latchRiderId = rider.getId();
         setState(STATE_LATCH_RIDING);
-        this.level().playSound(null, this.blockPosition(), SoundEvents.PISTON_EXTEND,
-                SoundSource.PLAYERS, 0.9F, 1.35F);
+        this.level().playSound(null, this.blockPosition(), ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 0.9F, 1.0F);
         sparkBurst(this.position().add(0.0D, 0.5D, 0.0D), 10);
     }
 
@@ -779,7 +790,7 @@ public class ZipperEntity extends Entity {
             //computed before close() so the whole connected group is still found
             for (BlockPos pos : computeMergedTunnel()) {
                 if (serverLevel.getBlockEntity(pos) instanceof ZipperSpaceBlockEntity space) {
-                    space.closeSoon(CLOSE_ANIM_TICKS);
+                    space.closeSoon(CLOSE_ANIM_TICKS - ZipperSpaceBlockEntity.RETURN_ANIMATION_TICKS);
                 }
             }
         }
@@ -797,8 +808,8 @@ public class ZipperEntity extends Entity {
             zipper.pendingOpenAction = action;
             zipper.setState(STATE_OPENING);
         }
-        this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 0.9F, 1.35F);
+        this.level().playSound(null, this.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 0.9F, 1.0F);
     }
 
     private void startHiding(Player owner) {
@@ -827,8 +838,8 @@ public class ZipperEntity extends Entity {
         lastFood = owner.getFoodData().getFoodLevel();
         lastSaturation = owner.getFoodData().getSaturationLevel();
         setState(STATE_HIDING);
-        this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.0F, 1.4F);
+        this.level().playSound(null, this.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 1.0F);
         sparkBurst(hide.add(0, 1.0D, 0), 14);
     }
 
@@ -933,7 +944,9 @@ public class ZipperEntity extends Entity {
     private void endHiding(Player owner, Vec3 exit) {
         if (owner != null && exit != null) {
             owner.teleportTo(exit.x, exit.y, exit.z);
-            owner.setDeltaMovement(Vec3.ZERO);
+            owner.setNoGravity(false);
+            owner.setDeltaMovement(0.0D, -0.08D, 0.0D);
+            owner.fallDistance = 0.0F;
             owner.hurtMarked = true;
         }
         endHiding(owner);
@@ -954,7 +967,9 @@ public class ZipperEntity extends Entity {
             return;
         }
         owner.teleportTo(exit.x, exit.y, exit.z);
-        owner.setDeltaMovement(Vec3.ZERO);
+        owner.setNoGravity(false);
+        owner.setDeltaMovement(0.0D, -0.08D, 0.0D);
+        owner.fallDistance = 0.0F;
         owner.hurtMarked = true;
         if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(false);
         owner.removeEffect(MobEffects.INVISIBILITY);
@@ -981,17 +996,10 @@ public class ZipperEntity extends Entity {
     public List<BlockPos> computeTunnel() {
         List<BlockPos> list = new ArrayList<>();
         Direction inward = getFace().getOpposite();
-        if (inward.getAxis() == Direction.Axis.Y) {
-            for (int d = 0; d < TUNNEL_DEPTH_FLOOR; d++) {
-                list.add(anchor.relative(inward, d));
-            }
-        } else {
-            for (int d = 0; d < TUNNEL_DEPTH_WALL; d++) {
-                BlockPos column = anchor.relative(inward, d);
-                for (int dy = 0; dy < 2; dy++) {
-                    list.add(new BlockPos(column.getX(), baseY + dy, column.getZ()));
-                }
-            }
+        int maxDepth = getFace().getAxis() == Direction.Axis.Y
+                ? TUNNEL_DEPTH_FLOOR : TUNNEL_DEPTH_WALL;
+        for (int d = 0; d < maxDepth; d++) {
+            list.add(anchor.relative(inward, d));
         }
         return list;
     }
@@ -1002,37 +1010,11 @@ public class ZipperEntity extends Entity {
             return computeTunnel();
         }
 
-        Direction face = getFace();
-        Direction inward = face.getOpposite();
-        if (face.getAxis() == Direction.Axis.Y) {
-            List<ZipperPathCell> path = getMergedFloorPath();
-            Set<BlockPos> floorPositions = new LinkedHashSet<>();
-            int zSign = face == Direction.UP ? -1 : 1;
-            for (ZipperPathCell cell : path) {
-                int x = anchor.getX() + cell.u();
-                int z = anchor.getZ() + cell.v() * zSign;
-                for (int depth = 0; depth < TUNNEL_DEPTH_FLOOR
-                        && floorPositions.size() < MAX_MERGED_TUNNEL_BLOCKS; depth++) {
-                    int y = anchor.getY() + inward.getStepY() * depth;
-                    floorPositions.add(new BlockPos(x, y, z));
-                }
-            }
-            return new ArrayList<>(floorPositions);
-        }
+        // Connections affect the zipper artwork, not blocks between or around it.
+        // Each connected zipper opens only its own anchor block.
         Set<BlockPos> positions = new LinkedHashSet<>();
-        List<ZipperPathCell> wallPath = getMergedWallPath();
-        Direction tangent = face.getCounterClockWise();
-        for (ZipperPathCell cell : wallPath) {
-            int x = anchor.getX() + tangent.getStepX() * cell.u();
-            int z = anchor.getZ() + tangent.getStepZ() * cell.u();
-            int y = baseY + cell.v();
-            for (int depth = 0; depth < TUNNEL_DEPTH_WALL
-                    && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; depth++) {
-                for (int height = 0; height < 2 && positions.size() < MAX_MERGED_TUNNEL_BLOCKS; height++) {
-                    positions.add(new BlockPos(x + inward.getStepX() * depth,
-                            y + height + inward.getStepY() * depth, z + inward.getStepZ() * depth));
-                }
-            }
+        for (ZipperEntity zipper : connected) {
+            positions.add(zipper.getAnchor());
         }
         return new ArrayList<>(positions);
     }
@@ -1062,7 +1044,9 @@ public class ZipperEntity extends Entity {
             BlockEntity be = serverLevel.getBlockEntity(pos);
             if (be instanceof ZipperSpaceBlockEntity space) {
 
-                space.setup(original, TUNNEL_TICKS + CLOSE_ANIM_TICKS);
+                space.setup(original, TUNNEL_TICKS + CLOSE_ANIM_TICKS
+                                - ZipperSpaceBlockEntity.RETURN_ANIMATION_TICKS,
+                        isOnEntrancePlane(pos, anchor, getFace()), getFace());
             }
             opened++;
         }
@@ -1073,9 +1057,16 @@ public class ZipperEntity extends Entity {
         }
         releaseOwnerSwallowedAtExit(owner);
         setUnzipGroupState(STATE_TUNNEL, 0);
-        serverLevel.playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2F, 0.6F);
-        serverLevel.playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.5F);
+        serverLevel.playSound(null, this.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.2F, 0.9F);
         sparkBurst(this.position().add(0, 1.0D, 0), 24);
+    }
+
+    private static boolean isOnEntrancePlane(BlockPos pos, BlockPos anchor, Direction face) {
+        int projection = (pos.getX() - anchor.getX()) * face.getStepX()
+                + (pos.getY() - anchor.getY()) * face.getStepY()
+                + (pos.getZ() - anchor.getZ()) * face.getStepZ();
+        return projection == 0;
     }
 
     private Entity findApproachingEntity(Player owner) {
@@ -1091,6 +1082,10 @@ public class ZipperEntity extends Entity {
     }
 
     private void startCaptureOpening(Entity target) {
+        if (target == null || !target.isAlive() || target instanceof StandEntity
+                || target instanceof ZipperEntity || isOwner(target)) {
+            return;
+        }
         List<ZipperEntity> group = getUnzipGroup();
         if (group.stream().anyMatch(zipper -> zipper.getState() != STATE_NEUTRAL)) {
             return;
@@ -1101,8 +1096,8 @@ public class ZipperEntity extends Entity {
             zipper.setState(STATE_OPENING);
         }
         this.pendingCapture = target.getUUID();
-        this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 0.9F, 1.35F);
+        this.level().playSound(null, this.blockPosition(), ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 0.9F, 0.95F);
     }
 
     private void swallowPendingEntity() {
@@ -1111,6 +1106,12 @@ public class ZipperEntity extends Entity {
         }
         Entity target = serverLevel.getEntity(pendingCapture);
         pendingCapture = null;
+        // Recheck before damage: stands must never be pulled into or hurt by the portal.
+        if (target == null || !target.isAlive() || target instanceof StandEntity
+                || target instanceof ZipperEntity || isOwner(target)) {
+            close();
+            return;
+        }
         if (target instanceof LivingEntity living && living.isAlive()) {
             int marks = getOwnerTagLevel(living);
             DamageSource entryDamage = getOwnerPlayer() != null
@@ -1124,8 +1125,8 @@ public class ZipperEntity extends Entity {
                 zipper.retainAfterClose = true;
             }
             sparkBurst(target.position().add(0, Math.max(0.25D, target.getBbHeight() * 0.5D), 0), 12);
-            serverLevel.playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                    SoundSource.PLAYERS, 1.0F, 0.65F);
+            serverLevel.playSound(null, this.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                    SoundSource.PLAYERS, 1.0F, 0.9F);
         }
         close();
     }
@@ -1139,8 +1140,11 @@ public class ZipperEntity extends Entity {
         UUID id = entity.getUUID();
         swallowed.add(id);
         int tagLevel = entity instanceof LivingEntity living ? getOwnerTagLevel(living) : 0;
+        boolean wasInZipperDimension = entity instanceof IStickyFingersDismemberment state
+                && state.roundabout$isInZipperDimension();
         swallowedStates.put(id, new StoredEntityState(entity.isNoGravity(), entity.isInvisible(),
-                entity.isInvulnerable(), entity instanceof Mob mob && mob.isNoAi(), tagLevel));
+                entity.isInvulnerable(), entity instanceof Mob mob && mob.isNoAi(), tagLevel,
+                wasInZipperDimension));
         entity.setNoGravity(true);
         entity.setInvisible(true);
         if (entity instanceof LivingEntity living) {
@@ -1150,6 +1154,9 @@ public class ZipperEntity extends Entity {
                 mob.setLastHurtByMob(null);
                 mob.setNoAi(true);
             }
+        }
+        if (entity instanceof IStickyFingersDismemberment zipperState) {
+            zipperState.roundabout$setInZipperDimension(true);
         }
         Vec3 hide = getHidePos();
         entity.moveTo(hide.x, hide.y, hide.z);
@@ -1257,7 +1264,9 @@ public class ZipperEntity extends Entity {
 
         StoredEntityState flags = swallowedStates.getOrDefault(id, StoredEntityState.DEFAULT);
         entity.moveTo(exit.x, exit.y, exit.z, entity.getYRot(), entity.getXRot());
-        entity.setNoGravity(flags.noGravity());
+        // Every entity ejected from the zipper returns to ordinary world gravity,
+        // even if it had noGravity enabled before it was swallowed.
+        entity.setNoGravity(false);
         entity.setInvisible(flags.invisible());
         if (entity instanceof LivingEntity living) {
             living.setInvulnerable(false);
@@ -1271,13 +1280,17 @@ public class ZipperEntity extends Entity {
             }
             living.setInvulnerable(flags.invulnerable());
         }
+        if (entity instanceof IStickyFingersDismemberment zipperState) {
+            zipperState.roundabout$setInZipperDimension(false);
+        }
         Vec3 motion = new Vec3(exitFace.getStepX() * 0.45D,
-                exitFace.getStepY() * 0.45D + 0.2D, exitFace.getStepZ() * 0.45D);
+                Math.min(-0.08D, exitFace.getStepY() * 0.45D + 0.2D), exitFace.getStepZ() * 0.45D);
+        if (entity instanceof LivingEntity living) living.fallDistance = 0.0F;
         entity.setDeltaMovement(motion);
         entity.hurtMarked = true;
         sparkBurst(entity.position().add(0, Math.max(0.25D, entity.getBbHeight() * 0.5D), 0), 10);
-        serverLevel.playSound(null, this.blockPosition(), SoundEvents.SHEEP_SHEAR,
-                SoundSource.PLAYERS, 0.9F, 1.3F);
+        serverLevel.playSound(null, this.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 0.9F, 1.05F);
     }
 
     private void releaseSwallowedAt(Vec3 exit, Player owner, boolean damageOnExit, Direction exitFace) {
@@ -1296,13 +1309,20 @@ public class ZipperEntity extends Entity {
     }
 
     private record StoredEntityState(boolean noGravity, boolean invisible, boolean invulnerable, boolean noAi,
-                                     int tagLevel) {
-        private static final StoredEntityState DEFAULT = new StoredEntityState(false, false, false, false, 0);
+                                     int tagLevel, boolean inZipperDimension) {
+        private static final StoredEntityState DEFAULT = new StoredEntityState(false, false, false, false, 0, false);
     }
 
     public void close() {
         if (this.level().isClientSide()) {
             return;
+        }
+        if (this.level() instanceof ServerLevel serverLevel) {
+            for (BlockPos pos : computeMergedTunnel()) {
+                if (serverLevel.getBlockEntity(pos) instanceof ZipperSpaceBlockEntity space) {
+                    space.closeSoon(CLOSE_ANIM_TICKS - ZipperSpaceBlockEntity.RETURN_ANIMATION_TICKS);
+                }
+            }
         }
         boolean changed = false;
         for (ZipperEntity zipper : getUnzipGroup()) {
@@ -1314,8 +1334,8 @@ public class ZipperEntity extends Entity {
             }
         }
         if (changed) {
-            this.level().playSound(null, this.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                    SoundSource.PLAYERS, 0.8F, 0.8F);
+            this.level().playSound(null, this.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                    SoundSource.PLAYERS, 0.8F, 0.85F);
         }
     }
 
@@ -1493,7 +1513,8 @@ public class ZipperEntity extends Entity {
                 target.hurtMarked = true;
             }
         }
-        serverLevel.playSound(null, front, SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 0.6F, 1.5F);
+        serverLevel.playSound(null, front, ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 0.6F, 1.1F);
     }
 
     private void performMine() {
@@ -1502,21 +1523,25 @@ public class ZipperEntity extends Entity {
         }
         BlockState state = serverLevel.getBlockState(anchor);
         if (!canZip(serverLevel, anchor)) {
-            close();
+            if (vanishOnMine) discard();
+            else close();
             return;
         }
         float hardness = Math.max(0.0F, state.getDestroySpeed(serverLevel, anchor));
         float damage = Mth.clamp(1.0F + hardness * 1.2F, 1.0F, 5.0F);
         Direction face = getFace();
         Vec3 center = Vec3.atCenterOf(anchor).add(face.getStepX() * 0.55D, face.getStepY() * 0.55D, face.getStepZ() * 0.55D);
-        ZipperDebrisEntity.launch(serverLevel, ownerUUID, state, center, face, damage);
         if (serverLevel.getGameRules().getBoolean(ModGamerules.ROUNDABOUT_STAND_GRIEFING)) {
+            // The break debris launches on the same tick the zipper finishes
+            // opening, including each zipper in the outer 7x7 ring.
+            ZipperDebrisEntity.launch(serverLevel, ownerUUID, state, center, face, damage);
             serverLevel.destroyBlock(anchor, false);
         } else {
             serverLevel.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, state),
                     center.x, center.y, center.z, 8, 0.25D, 0.25D, 0.25D, 0.05D);
         }
-        close();
+        if (vanishOnMine) discard();
+        else close();
     }
 
     @Override
@@ -1591,6 +1616,7 @@ public class ZipperEntity extends Entity {
                 tag.getDouble("latchVelocityZ"));
         latchRiderId = tag.getInt("latchRiderId");
         mineDelay = tag.getInt("mineDelay");
+        vanishOnMine = tag.getBoolean("vanishOnMine");
         this.entityData.set(MINI, tag.getBoolean("mini"));
         this.entityData.set(FACE, tag.getInt("face"));
         this.entityData.set(STATE, tag.getInt("state"));
@@ -1606,7 +1632,8 @@ public class ZipperEntity extends Entity {
             if (state.hasUUID("id")) {
                 swallowedStates.put(state.getUUID("id"), new StoredEntityState(
                         state.getBoolean("noGravity"), state.getBoolean("invisible"),
-                        state.getBoolean("invulnerable"), state.getBoolean("noAi"), state.getInt("tagLevel")));
+                        state.getBoolean("invulnerable"), state.getBoolean("noAi"), state.getInt("tagLevel"),
+                        state.getBoolean("inZipperDimension")));
             }
         }
     }
@@ -1637,6 +1664,7 @@ public class ZipperEntity extends Entity {
         tag.putDouble("latchVelocityZ", latchVelocity.z);
         tag.putInt("latchRiderId", latchRiderId);
         tag.putInt("mineDelay", mineDelay);
+        tag.putBoolean("vanishOnMine", vanishOnMine);
         tag.putBoolean("mini", isMini());
         tag.putInt("face", this.entityData.get(FACE));
         tag.putInt("state", getState());
@@ -1655,6 +1683,7 @@ public class ZipperEntity extends Entity {
             entry.putBoolean("invulnerable", state.invulnerable());
             entry.putBoolean("noAi", state.noAi());
             entry.putInt("tagLevel", state.tagLevel());
+            entry.putBoolean("inZipperDimension", state.inZipperDimension());
             stateList.add(entry);
         }
         tag.put("swallowedStates", stateList);

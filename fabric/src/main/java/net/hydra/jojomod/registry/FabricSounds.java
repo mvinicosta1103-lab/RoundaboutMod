@@ -250,6 +250,15 @@ public class FabricSounds {
         addSound(ModSounds.STAND_BARRAGE_HIT_ID, ModSounds.STAND_BARRAGE_HIT_EVENT);
         addSound(ModSounds.STAND_BARRAGE_END_BLOCK_ID, ModSounds.STAND_BARRAGE_END_BLOCK_EVENT);
         addSound(ModSounds.STAND_BARRAGE_HIT2_ID, ModSounds.STAND_BARRAGE_HIT2_EVENT);
+        addSound(ModSounds.SF_HEAVY_HIT_ID, ModSounds.SF_HEAVY_HIT_EVENT);
+        addSound(ModSounds.SF_BRUNO_ARI_ID, ModSounds.SF_BRUNO_ARI_EVENT);
+        addSound(ModSounds.SF_HIT_1_ID, ModSounds.SF_HIT_1_EVENT);
+        addSound(ModSounds.SF_HIT_2_ID, ModSounds.SF_HIT_2_EVENT);
+        addSound(ModSounds.SF_HIT_3_ID, ModSounds.SF_HIT_3_EVENT);
+        addSound(ModSounds.SF_HIT_4_ID, ModSounds.SF_HIT_4_EVENT);
+        addSound(ModSounds.SF_ZIPPER_BREAK_ID, ModSounds.SF_ZIPPER_BREAK_EVENT);
+        addSound(ModSounds.SF_HIT_ZIPPER_ID, ModSounds.SF_HIT_ZIPPER_EVENT);
+        addSound(ModSounds.SF_SUMMON_ID, ModSounds.SF_SUMMON_EVENT);
         addSound(ModSounds.STAND_BARRAGE_END_ID, ModSounds.STAND_BARRAGE_END_EVENT);
 
         addSound(ModSounds.EXPLOSIVE_PUNCH_ID, ModSounds.EXPLOSIVE_PUNCH_EVENT);

@@ -166,6 +166,11 @@ public class StickyFingersModel<T extends StickyFingersEntity> extends StandMode
         this.animate(pEntity.zipperFistPrepare, StickyFingersAnimations.LONG_PUNCH_PREPARE, pAgeInTicks, 1.0F);
         this.animate(pEntity.zipperFistIdle, StickyFingersAnimations.LONG_PUNCH_IDLE_LOOP, pAgeInTicks, 1.0F);
         this.animate(pEntity.zipperFistImpact, StickyFingersAnimations.LONG_PUNCH_IMPACT, pAgeInTicks, 0.4F);
+        this.animate(pEntity.zipperPoleCollapse, StickyFingersAnimations.ZIPPER_POLE_COLLAPSE, pAgeInTicks, 0.5F);
+        this.animate(pEntity.guillotinePunch, StickyFingersAnimations.GUILLOTINE_PUNCH, pAgeInTicks, 1.0F);
+        this.animate(pEntity.guillotineChop, StickyFingersAnimations.GUILLOTINE_CHOP, pAgeInTicks, 1.0F);
+        this.animate(pEntity.guillotineFull, StickyFingersAnimations.GUILLOTINE_FULL, pAgeInTicks, 1.0F);
+        this.animate(pEntity.deathByDisassembly, StickyFingersAnimations.DEATH_BY_DISASSEMBLY, pAgeInTicks, 1.0F);
 
         this.animate(pEntity.bloodSplashWindup, KingCrimsonAnimations.Chop_Start, pAgeInTicks, 1.5f);
         this.animate(pEntity.bloodSplashThrow, KingCrimsonAnimations.Chop_Attack, pAgeInTicks, 1.6f);

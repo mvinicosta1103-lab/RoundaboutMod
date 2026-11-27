@@ -21,6 +21,9 @@ import net.minecraft.world.phys.Vec3;
 
 /** Projectile used by Sticky Fingers' launched zipper fist. */
 public class StickyFingersFistEntity extends ThrowableItemProjectile {
+    private static final double MAX_FLIGHT_DISTANCE = 15.0D;
+    private static final EntityDataAccessor<Float> FLIGHT_DISTANCE = SynchedEntityData.defineId(
+            StickyFingersFistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> LATCHED = SynchedEntityData.defineId(
             StickyFingersFistEntity.class, EntityDataSerializers.BOOLEAN);
     private int latchedTicks;
@@ -28,6 +31,11 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
 
     public void setLaunchOrigin(Vec3 launchOrigin) {
         this.launchOrigin = launchOrigin;
+        this.entityData.set(FLIGHT_DISTANCE, 0.0F);
+    }
+
+    public float getFlightDistance() {
+        return this.entityData.get(FLIGHT_DISTANCE);
     }
 
     public StickyFingersFistEntity(EntityType<? extends StickyFingersFistEntity> type, Level level) {
@@ -47,6 +55,7 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
+        this.entityData.define(FLIGHT_DISTANCE, 0.0F);
         this.entityData.define(LATCHED, false);
     }
 
@@ -77,7 +86,11 @@ public class StickyFingersFistEntity extends ThrowableItemProjectile {
         super.tick();
         if (!this.isRemoved()) {
             if (this.launchOrigin == null) this.launchOrigin = this.position();
-            if (this.position().distanceToSqr(this.launchOrigin) >= 15.0D * 15.0D) {
+            double distance = this.position().distanceTo(this.launchOrigin);
+            if (!this.level().isClientSide()) {
+                this.entityData.set(FLIGHT_DISTANCE, (float) Math.min(MAX_FLIGHT_DISTANCE, distance));
+            }
+            if (distance >= MAX_FLIGHT_DISTANCE) {
                 this.discard();
             }
         }

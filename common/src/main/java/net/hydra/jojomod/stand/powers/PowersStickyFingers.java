@@ -70,6 +70,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PowersStickyFingers extends NewPunchingStand {
 
+    private static final SoundEvent[] STICKY_BARRAGE_HITS = {
+            ModSounds.SF_HIT_1_EVENT, ModSounds.SF_HIT_2_EVENT,
+            ModSounds.SF_HIT_3_EVENT, ModSounds.SF_HIT_4_EVENT
+    };
+    private int stickyBarrageHitIndex;
+
     public PowersStickyFingers(LivingEntity self) {
         super(self);
     }
@@ -107,9 +113,52 @@ public class PowersStickyFingers extends NewPunchingStand {
     @Override
     public SoundEvent getSoundFromByte(byte soundChoice) {
         if (soundChoice == SoundIndex.SUMMON_SOUND) {
-            return ModSounds.SUMMON_KING_CRIMSON_EVENT;
+            return ModSounds.SF_SUMMON_EVENT;
         }
         return super.getSoundFromByte(soundChoice);
+    }
+
+    @Override
+    public void playBarrageCrySound() {
+        stickyBarrageHitIndex = 0;
+        if (!this.self.level().isClientSide()) {
+            this.self.level().playSound(null, this.self.blockPosition(), ModSounds.SF_BRUNO_ARI_EVENT,
+                    SoundSource.PLAYERS, 1.0F, 1.0F);
+        }
+    }
+
+    @Override
+    public SoundEvent getPunchLandSound() {
+        return isStickyBarrageActive() ? nextStickyBarrageHit() : super.getPunchLandSound();
+    }
+
+    @Override
+    public SoundEvent getPunchLandLastSound() {
+        return isStickyBarrageActive() ? ModSounds.SF_HEAVY_HIT_EVENT : super.getPunchLandLastSound();
+    }
+
+    private boolean isStickyBarrageActive() {
+        return barrageTimer > 0 || forcedUnzipTargetId != -1 || this.getActivePower() == PowerIndex.BARRAGE;
+    }
+
+    private SoundEvent nextStickyBarrageHit() {
+        SoundEvent sound = STICKY_BARRAGE_HITS[stickyBarrageHitIndex % STICKY_BARRAGE_HITS.length];
+        stickyBarrageHitIndex++;
+        return sound;
+    }
+
+    private void playStickyBarrageHit(double x, double y, double z) {
+        if (this.self.level().isClientSide()) return;
+        SoundEvent sound = nextStickyBarrageHit();
+        this.self.level().playSound(null, x, y, z, sound, SoundSource.PLAYERS,
+                0.95F, 0.92F + this.self.getRandom().nextFloat() * 0.16F);
+    }
+
+    private void playStickyHeavyHit(double x, double y, double z) {
+        if (!this.self.level().isClientSide()) {
+            this.self.level().playSound(null, x, y, z, ModSounds.SF_HEAVY_HIT_EVENT,
+                    SoundSource.PLAYERS, 1.2F, 1.0F);
+        }
     }
 
     @Override
@@ -146,7 +195,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (isInZipperDimension(this.self) && context != PowerContext.SKILL_1_NORMAL) {
             return;
         }
-        if (disassembleTicks > 0) cancelDisassembleClient();
         switch (context) {
             case SKILL_1_NORMAL -> {
                 unzipClient();
@@ -160,7 +208,6 @@ public class PowersStickyFingers extends NewPunchingStand {
 
             case SKILL_2_NORMAL -> primeFistClient();
             case SKILL_2_CROUCH -> releaseZippersClient();
-            case SKILL_2_GUARD, SKILL_2_CROUCH_GUARD -> disassembleClient();
 
             case SKILL_3_NORMAL -> {
                 if (hasLatchedFist()) grappleClient();
@@ -194,7 +241,6 @@ public class PowersStickyFingers extends NewPunchingStand {
     public static final byte UNZIP = PowerIndex.POWER_1;
     public static final int UNZIP_COOLDOWN = 60;
     public static final double UNZIP_RANGE = 6.0D;
-    private static final double ZIPPER_DIMENSION_EXIT_RANGE = 64.0D;
 
     public static boolean isInZipperDimension(Entity entity) {
         return entity instanceof IStickyFingersDismemberment state && state.roundabout$isInZipperDimension();
@@ -237,7 +283,9 @@ public class PowersStickyFingers extends NewPunchingStand {
             return;
         }
         boolean insideZipperDimension = isInZipperDimension(this.self);
-        double range = insideZipperDimension ? ZIPPER_DIMENSION_EXIT_RANGE : UNZIP_RANGE;
+        // Keep the exit zipper within normal reach. The old 64-block range could
+        // place an exit far away and then teleport the user to that distant block.
+        double range = UNZIP_RANGE;
         HitResult hit = this.self.pick(range, 1.0F, false);
         Level level = this.self.level();
         EntityHitResult entityHit = MainUtil.rayCastEntityHitResult(this.self, (float) range);
@@ -267,14 +315,14 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (level.isClientSide()) {
             return;
         }
-        int feetY = Mth.floor(this.self.getY());
-        int baseY = anchor.getY() < feetY ? anchor.getY() : Math.max(feetY, anchor.getY() - 1);
+        playZipperCollapseAnimation();
+        int baseY = Mth.floor(blockHit.getLocation().y - 0.5D);
 
         ZipperEntity zipper = ZipperEntity.create(level, this.self, anchor, face, baseY);
         level.addFreshEntity(zipper);
 
-        level.playSound(null, this.self.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.0F, 0.8F);
-        level.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.6F);
+        level.playSound(null, this.self.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F);
         if (level instanceof ServerLevel serverLevel) {
             BlockState surface = serverLevel.getBlockState(anchor);
             if (!surface.isAir()) {
@@ -295,6 +343,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private void unzipTarget(LivingEntity target) {
         if (!target.isAlive() || target instanceof StandEntity) return;
+        playZipperCollapseAnimation();
         addTag(target);
         int level = Math.max(1, getTagLevel(target));
         float damage = getUnzipBodyDamageLimit(target);
@@ -312,8 +361,8 @@ public class PowersStickyFingers extends NewPunchingStand {
                     target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
                     12 + level * 4, 0.35D, 0.45D, 0.35D, 0.03D);
         }
-        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
-                SoundSource.PLAYERS, 1.0F, 0.75F + level * 0.08F);
+        this.self.level().playSound(null, target.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F + level * 0.04F);
     }
 
     /** Caps one Unzip Body activation at 35% max health and preserves a 50% health floor. */
@@ -488,8 +537,6 @@ public class PowersStickyFingers extends NewPunchingStand {
 
         S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_LIMB_ANIMATION,
                 target.getId(), addedParts);
-        target.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 0.8F, 0.75F);
         if (target.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
                     target.getY() + target.getBbHeight() * 0.52D, target.getZ(),
@@ -533,8 +580,8 @@ public class PowersStickyFingers extends NewPunchingStand {
 
         S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_LIMB_ANIMATION,
                 this.self.getId(), partMask);
-        this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.0F, 0.78F);
+        this.self.level().playSound(null, this.self.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F);
         if (this.self.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, this.self.getX(),
                     this.self.getY() + this.self.getBbHeight() * 0.5D, this.self.getZ(),
@@ -608,18 +655,15 @@ public class PowersStickyFingers extends NewPunchingStand {
     // Keep these unique to Sticky Fingers: POWER_2 is already used by mass unzip above.
     public static final byte ZIPPER_FIST = 90;
     public static final byte ZIPPER_RELEASE = 91;
-    public static final byte ZIPPER_DISASSEMBLE = 92;
     public static final byte ZIPPER_GRAPPLE = 93;
     public static final byte ZIPPER_LATCH = 98;
     public static final byte ZIPPER_TOGGLE_MARKS = 97;
     private static final byte ZIPPER_FIST_FIRE = 94;
     private static final byte ZIPPER_FIST_CANCEL = 95;
-    private static final byte ZIPPER_DISASSEMBLE_CANCEL = 96;
     public static final byte ZIPPER_AUTO_UNZIP_CONFIG = 99;
     public static final int ZIPPER_AUTO_UNZIP_ENABLED = 1 << 8;
     private static final int FIST_COOLDOWN = 70;
     private static final int RELEASE_COOLDOWN = 180;
-    private static final int DISASSEMBLE_COOLDOWN = 100;
     private static final int GRAPPLE_COOLDOWN = 50;
     private static final int LATCH_COOLDOWN = 100;
     private static final int MAX_RELEASE_WINDUP = 24;
@@ -629,12 +673,10 @@ public class PowersStickyFingers extends NewPunchingStand {
     private StickyFingersFistEntity latchedFist;
     private int grappleTicks;
     private int maxReleaseTicks;
+    private int zipperCollapseAnimTicks;
     private int maxReleaseTargetId = -1;
     private int maxReleaseLevel;
     private float maxReleaseDamageRemaining;
-    private int disassembleTicks;
-    private boolean wasInvulnerable;
-    private boolean wasInvisible;
     private boolean fistPrimed;
     private int fistPrimeTicks;
     private int fistPrimeElapsedTicks;
@@ -704,10 +746,6 @@ public class PowersStickyFingers extends NewPunchingStand {
     @Override
     public void buttonInputAttack(boolean keyIsDown, Options options) {
         if (isInZipperDimension(this.self)) return;
-        if (keyIsDown && disassembleTicks > 0) {
-            cancelDisassembleClient();
-            return;
-        }
         if (keyIsDown && fistPrimed) {
             firePrimedFistClient();
             return;
@@ -727,10 +765,6 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (zipperUseButtonWasDown) return;
         zipperUseButtonWasDown = true;
         if (isInZipperDimension(this.self)) return;
-        if (keyIsDown && disassembleTicks > 0) {
-            cancelDisassembleClient();
-            return;
-        }
         if (keyIsDown && fistPrimed) {
             cancelPrimedFistClient();
             return;
@@ -776,6 +810,10 @@ public class PowersStickyFingers extends NewPunchingStand {
         this.setActivePower(ZIPPER_FIST);
         this.poseStand(OffsetIndex.ATTACK);
         this.animateStand(StickyFingersEntity.ZIPPER_FIST_PREPARE);
+        if (!this.self.level().isClientSide()) {
+            this.self.level().playSound(null, this.self.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                    SoundSource.PLAYERS, 0.7F, 1.1F);
+        }
     }
 
     public void releaseZippersClient() {
@@ -783,24 +821,6 @@ public class PowersStickyFingers extends NewPunchingStand {
             tryPower(ZIPPER_RELEASE, true);
             tryPowerPacket(ZIPPER_RELEASE);
         }
-    }
-
-    public void disassembleClient() {
-        if (!onCooldown(PowerIndex.SKILL_2_GUARD)) {
-            wasInvulnerable = this.self.isInvulnerable();
-            wasInvisible = this.self.isInvisible();
-            this.self.setInvulnerable(true);
-            this.self.setInvisible(true);
-            disassembleTicks = 14;
-            tryPower(ZIPPER_DISASSEMBLE, true);
-            tryPowerPacket(ZIPPER_DISASSEMBLE);
-        }
-    }
-
-    private void cancelDisassembleClient() {
-        endDisassemble();
-        tryPower(ZIPPER_DISASSEMBLE_CANCEL, true);
-        tryPowerPacket(ZIPPER_DISASSEMBLE_CANCEL);
     }
 
     public void grappleClient() {
@@ -858,8 +878,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         this.setCooldown(PowerIndex.SKILL_3, LATCH_COOLDOWN);
         ZipperEntity zipper = ZipperEntity.createLatch(level, this.self, anchor, face, baseY, rideDirection);
         level.addFreshEntity(zipper);
-        level.playSound(null, anchor, SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.0F, 0.85F);
+        level.playSound(null, anchor, ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.95F);
     }
 
     private void launchFist() {
@@ -879,8 +899,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         fist.setDeltaMovement(look.scale(1.0D).add(this.self.getDeltaMovement().scale(0.25D)));
         fist.setNoGravity(true);
         this.self.level().addFreshEntity(fist);
-        this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.PISTON_EXTEND,
-                SoundSource.PLAYERS, 0.9F, 1.25F);
+        this.self.level().playSound(null, this.self.blockPosition(), ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 0.9F, 1.0F);
     }
 
     public void setLatchedFist(StickyFingersFistEntity fist) {
@@ -930,6 +950,7 @@ public class PowersStickyFingers extends NewPunchingStand {
             maxReleaseLevel = level;
             maxReleaseTicks = MAX_RELEASE_WINDUP;
             maxReleaseDamageRemaining = getUnzipBodyDamageLimit(target);
+            this.animateStand(StickyFingersEntity.DEATH_BY_DISASSEMBLY);
             target.addEffect(new MobEffectInstance(MobEffects.GLOWING, MAX_RELEASE_WINDUP, 0, false, true));
             this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
                     SoundSource.PLAYERS, 1.2F, 0.55F);
@@ -957,8 +978,8 @@ public class PowersStickyFingers extends NewPunchingStand {
             }
         }
         removeTag(target);
-        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
-                SoundSource.PLAYERS, 1.0F, 0.75F);
+        this.self.level().playSound(null, target.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -1000,10 +1021,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         anchorForcedUnzipStand(target);
         this.animateStand(StandEntity.BARRAGE);
         playBarrageCrySound();
-        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
-                SoundSource.PLAYERS, 1.2F, 0.6F);
-        this.self.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.2F, 0.5F);
+        this.self.level().playSound(null, target.blockPosition(), ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F);
         // first zipper: the one that pins the target in place
         syncTagLevel(target, FORCED_MARK_FLAG | 1);
         if (this.self.level() instanceof ServerLevel serverLevel) {
@@ -1053,9 +1072,7 @@ public class PowersStickyFingers extends NewPunchingStand {
             this.animateStand(StandEntity.BARRAGE);
         }
         if (forcedUnzipElapsed % 3 == 0) {
-            this.self.level().playSound(null, target.blockPosition(),
-                    ModSounds.STAND_BARRAGE_HIT_EVENT, SoundSource.PLAYERS, 0.8F,
-                    0.9F + this.self.getRandom().nextFloat() * 0.25F);
+            playStickyBarrageHit(target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ());
         }
 
         int sinceBind = forcedUnzipElapsed - FORCED_UNZIP_BIND_TICKS;
@@ -1092,8 +1109,8 @@ public class PowersStickyFingers extends NewPunchingStand {
                     target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
                     5, 0.25D, 0.35D, 0.25D, 0.08D);
         }
-        this.self.level().playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR,
-                SoundSource.PLAYERS, 0.9F, 0.7F + index * 0.1F);
+        this.self.level().playSound(null, target.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 0.9F, 0.9F + index * 0.04F);
     }
 
     private void finishForcedUnzip(LivingEntity target) {
@@ -1106,8 +1123,7 @@ public class PowersStickyFingers extends NewPunchingStand {
                     target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
                     48, 0.65D, 0.8D, 0.65D, 0.08D);
         }
-        this.self.level().playSound(null, target.blockPosition(), SoundEvents.IRON_TRAPDOOR_CLOSE,
-                SoundSource.PLAYERS, 1.5F, 0.5F);
+        playStickyHeavyHit(target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ());
         endForcedUnzip();
     }
 
@@ -1124,32 +1140,11 @@ public class PowersStickyFingers extends NewPunchingStand {
         this.setPowerNone();
     }
 
-    private void startDisassemble() {
-        this.setCooldown(PowerIndex.SKILL_2_GUARD, DISASSEMBLE_COOLDOWN);
-        if (disassembleTicks <= 0) {
-            this.wasInvulnerable = this.self.isInvulnerable();
-            this.wasInvisible = this.self.isInvisible();
-        }
-        this.self.setInvulnerable(true);
-        this.self.setInvisible(true);
-        this.disassembleTicks = 14;
-        if (this.self.level().isClientSide()) return;
-        if (this.self.level() instanceof ServerLevel serverLevel) {
-            BlockState state = serverLevel.getBlockState(this.self.blockPosition().below());
-            if (!state.isAir()) {
-                serverLevel.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, state),
-                        this.self.getX(), this.self.getY() + 0.8D, this.self.getZ(),
-                        28, 0.35D, 0.45D, 0.35D, 0.12D);
-            }
-        }
-        this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_LEATHER,
-                SoundSource.PLAYERS, 1.0F, 0.55F);
-    }
-
     public static final byte MASS_UNZIP = PowerIndex.POWER_2;
     public static final int MASS_UNZIP_COOLDOWN = 200;
-    public static final int MASS_UNZIP_MAX_ZIPPERS = 50;
-    public static final int MASS_UNZIP_BARRAGE_TICKS = 40;
+    public static final int MASS_UNZIP_BARRAGE_SIDE = 7;
+    public static final int MASS_UNZIP_MAX_ZIPPERS = MASS_UNZIP_BARRAGE_SIDE * MASS_UNZIP_BARRAGE_SIDE;
+    public static final int MASS_UNZIP_BARRAGE_TICKS = ZipperEntity.OPEN_ANIM_TICKS;
 
     /** Longest the stand can stay anchored to the surface, even if some zipper takes very long to finish. */
     public static final int MASS_UNZIP_BARRAGE_MAX_TICKS = 120;
@@ -1165,6 +1160,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private int barrageTimer = 0;
     private Vec3 barrageSpot = null;
+    private BlockPos barrageAnchor = null;
     /** Where the stand is anchored while the barrage runs (it does NOT follow the user meanwhile). */
     private Vec3 barrageStandPos = null;
     private float barrageStandPitch = 0.0F;
@@ -1179,23 +1175,22 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private List<BlockPos> massUnzipArea(BlockPos anchor, Direction face) {
         List<BlockPos> area = new ArrayList<>();
-        if (face.getAxis() == Direction.Axis.Y) {
-            for (int layer = 0; layer < 2; layer++) {
-                int yOffset = face == Direction.UP ? layer : -layer;
-                for (int dx = -2; dx <= 2; dx++) {
-                    for (int dz = -2; dz <= 2; dz++) {
-                        area.add(anchor.offset(dx, yOffset, dz));
-                    }
-                }
-            }
-        } else {
-            Direction along = face.getAxis() == Direction.Axis.X ? Direction.SOUTH : Direction.EAST;
-            for (int dy = -1; dy <= 4; dy++) {
-                for (int t = -2; t <= 2; t++) {
-                    area.add(anchor.relative(along, t).above(dy));
-                }
+        Direction across = face.getAxis() == Direction.Axis.Y ? Direction.EAST
+                : face.getAxis() == Direction.Axis.X ? Direction.SOUTH : Direction.EAST;
+        Direction vertical = face.getAxis() == Direction.Axis.Y ? Direction.SOUTH : Direction.UP;
+        int radius = MASS_UNZIP_BARRAGE_SIDE / 2;
+        for (int a = -radius; a <= radius; a++) {
+            for (int b = -radius; b <= radius; b++) {
+                area.add(anchor.relative(across, a).relative(vertical, b));
             }
         }
+        // Animate from the impact point outward, one zipper at a time.
+        area.sort(java.util.Comparator
+                .comparingInt((BlockPos pos) -> Math.max(Math.abs(pos.getX() - anchor.getX()),
+                        Math.max(Math.abs(pos.getY() - anchor.getY()), Math.abs(pos.getZ() - anchor.getZ()))))
+                .thenComparingInt(BlockPos::getY)
+                .thenComparingInt(BlockPos::getX)
+                .thenComparingInt(BlockPos::getZ));
         return area;
     }
 
@@ -1214,35 +1209,22 @@ public class PowersStickyFingers extends NewPunchingStand {
         Direction face = blockHit.getDirection();
         int count = 0;
         int longestZipper = 0;
-        for (BlockPos pos : massUnzipArea(anchor, face)) {
-            if (count >= MASS_UNZIP_MAX_ZIPPERS) {
-                break;
-            }
-            if (!ZipperEntity.canZipOnFace(level, pos, face)) {
-                continue;
-            }
-            BlockPos front = pos.relative(face);
-            if (!level.getBlockState(front).getCollisionShape(level, front).isEmpty()) {
-                continue;
-            }
-            int distance = Math.abs(pos.getX() - anchor.getX()) + Math.abs(pos.getY() - anchor.getY())
-                    + Math.abs(pos.getZ() - anchor.getZ());
-            float hardness = Math.max(0.0F, level.getBlockState(pos).getDestroySpeed(level, pos));
-            int mineTicks = Mth.clamp(Math.round(hardness * 4.0F), 2, 30);
+        List<BlockPos> barrageArea = massUnzipArea(anchor, face);
+        for (BlockPos pos : barrageArea) {
+            if (!ZipperEntity.canZipOnFace(level, pos, face)) continue;
             ZipperEntity zipper = ZipperEntity.createMini(level, this.self, pos, face, pos.getY());
-            int stagger = zipMode ? distance + level.random.nextInt(2) : distance * 2 + level.random.nextInt(3);
-            zipper.startMining(stagger, mineTicks);
+            int stagger = count;
+            zipper.startSynchronizedMining(stagger);
             level.addFreshEntity(zipper);
-            longestZipper = Math.max(longestZipper,
-                    stagger + ZipperEntity.OPEN_ANIM_TICKS + mineTicks + ZipperEntity.CLOSE_ANIM_TICKS);
+            longestZipper = Math.max(longestZipper, stagger + ZipperEntity.OPEN_ANIM_TICKS);
             count++;
         }
         if (count == 0) {
             message("roundabout.zipper.nothing_to_unzip");
             return;
         }
-        level.playSound(null, this.self.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2F, 0.7F);
-        level.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.2F, 0.5F);
+        level.playSound(null, this.self.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.2F, 0.85F);
         startBarrageAnimation(anchor, face, longestZipper);
     }
 
@@ -1253,6 +1235,7 @@ public class PowersStickyFingers extends NewPunchingStand {
      */
     private void startBarrageAnimation(BlockPos anchor, Direction face, int zipperTicks) {
         barrageTimer = Mth.clamp(zipperTicks, MASS_UNZIP_BARRAGE_TICKS, MASS_UNZIP_BARRAGE_MAX_TICKS);
+        barrageAnchor = anchor.immutable();
         barrageSpot = Vec3.atCenterOf(anchor).add(face.getStepX() * 0.5D, face.getStepY() * 0.5D, face.getStepZ() * 0.5D);
         computeBarrageStandPlacement(anchor, face);
         anchorBarrageStand();
@@ -1300,6 +1283,7 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private void endBarrageAnimation() {
         barrageSpot = null;
+        barrageAnchor = null;
         barrageStandPos = null;
         //back to following the user: pose FOLLOW + idle animation
         this.setPowerNone();
@@ -1307,7 +1291,16 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     private void tickBarrageAnimation() {
         barrageTimer--;
-        if (barrageTimer <= 0 || !this.self.isAlive() || this.getStandEntity(this.self) == null) {
+        if (barrageTimer <= 0) {
+            if (barrageSpot != null) {
+                playStickyHeavyHit(barrageSpot.x, barrageSpot.y, barrageSpot.z);
+                performBarrageImpact();
+            }
+            endBarrageAnimation();
+            barrageTimer = 0;
+            return;
+        }
+        if (!this.self.isAlive() || this.getStandEntity(this.self) == null) {
             endBarrageAnimation();
             barrageTimer = 0;
             return;
@@ -1318,9 +1311,36 @@ public class PowersStickyFingers extends NewPunchingStand {
             this.animateStand(StandEntity.BARRAGE);
         }
         if (barrageTimer % 3 == 0 && barrageSpot != null) {
-            this.self.level().playSound(null, barrageSpot.x, barrageSpot.y, barrageSpot.z,
-                    ModSounds.STAND_BARRAGE_HIT_EVENT, SoundSource.PLAYERS, 0.8F, 0.9F + this.self.getRandom().nextFloat() * 0.25F);
+            playStickyBarrageHit(barrageSpot.x, barrageSpot.y, barrageSpot.z);
         }
+    }
+
+    /** Explosion damage belongs only to Sticky Fingers' zipper barrage finisher. */
+    private void performBarrageImpact() {
+        if (!(this.self.level() instanceof ServerLevel serverLevel) || barrageAnchor == null) return;
+
+        BlockPos anchor = barrageAnchor;
+        Vec3 center = barrageSpot == null ? Vec3.atCenterOf(anchor) : barrageSpot;
+        double blastRadius = 4.5D;
+        AABB blastArea = new AABB(center.x - blastRadius, center.y - blastRadius, center.z - blastRadius,
+                center.x + blastRadius, center.y + blastRadius, center.z + blastRadius);
+        for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, blastArea,
+                entity -> entity.isAlive() && entity != this.self && !(entity instanceof StandEntity))) {
+            double distance = target.position().add(0.0D, target.getBbHeight() * 0.5D, 0.0D).distanceTo(center);
+            if (distance > blastRadius) continue;
+            float damage = (float) (2.0D + 6.0D * (1.0D - distance / blastRadius));
+            damage = applyZipModeDamage(this.self, damage);
+            target.hurt(ModDamageTypes.of(serverLevel, ModDamageTypes.EXPLOSIVE_STAND, this.self), damage);
+            Vec3 knockback = target.position().subtract(center).normalize();
+            target.setDeltaMovement(target.getDeltaMovement().add(knockback.x * 0.55D, 0.35D,
+                    knockback.z * 0.55D));
+            target.hurtMarked = true;
+        }
+
+        serverLevel.sendParticles(ParticleTypes.EXPLOSION, center.x, center.y, center.z,
+                1, 0.25D, 0.2D, 0.25D, 0.0D);
+        serverLevel.sendParticles(ParticleTypes.CLOUD, center.x, center.y, center.z,
+                MASS_UNZIP_MAX_ZIPPERS, 1.8D, 0.45D, 1.8D, 0.12D);
     }
 
     public static final byte ZIPPER_STORE = PowerIndex.POWER_3;
@@ -1378,7 +1398,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         ZipperStorageEntity zipper = ZipperStorageEntity.createForBlock(level, this.self, pos, blockHit.getDirection());
         level.addFreshEntity(zipper);
-        level.playSound(null, pos, SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 0.9F);
+        level.playSound(null, pos, ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.95F);
         if (level instanceof ServerLevel serverLevel) {
             Vec3 at = zipper.position().add(0.0D, 0.5D, 0.0D);
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, at.x, at.y, at.z, 10, 0.3D, 0.3D, 0.3D, 0.02D);
@@ -1401,7 +1422,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         this.self.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
         ZipperStorageEntity zipper = ZipperStorageEntity.createForMob(level, this.self, mob, stuffed);
         level.addFreshEntity(zipper);
-        level.playSound(null, mob.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0F, 1.2F);
+        level.playSound(null, mob.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 1.0F);
         if (level instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, mob.getX(), mob.getY() + mob.getBbHeight() / 2,
                     mob.getZ(), 12, 0.3D, 0.4D, 0.3D, 0.02D);
@@ -1439,7 +1461,13 @@ public class PowersStickyFingers extends NewPunchingStand {
     private record GraftOrigin(String entityType, String ownerUuid, String standItem) { }
 
     private int guillotineTimer = 0;
+    private int guillotineApproachTicks = 0;
+    private int guillotinePhase = 0;
     private Vec3 guillotinePos = null;
+    private LivingEntity guillotineTarget = null;
+    private Vec3 guillotineTargetPosition = null;
+    private Vec3 guillotineStandPosition = null;
+    private boolean guillotineTargetWasNoAi;
 
     public void guillotineClient() {
         if (!this.onCooldown(PowerIndex.SKILL_4) && this.self.onGround() && guillotineTimer <= 0) {
@@ -1492,10 +1520,6 @@ public class PowersStickyFingers extends NewPunchingStand {
             this.setPowerNone();
         } else if (move == ZIPPER_RELEASE) {
             startZipperRelease();
-        } else if (move == ZIPPER_DISASSEMBLE) {
-            startDisassemble();
-        } else if (move == ZIPPER_DISASSEMBLE_CANCEL) {
-            endDisassemble();
         } else if (move == ZIPPER_GRAPPLE) {
             startGrapple();
         } else if (move == ZIPPER_LATCH) {
@@ -1537,8 +1561,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_GRAFT_CLEAR, target.getId(), 0);
         S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_LIMB_ANIMATION,
                 target.getId(), restoredParts);
-        target.level().playSound(null, target.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.0F, 1.25F);
+        target.level().playSound(null, target.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 1.0F);
         if (target.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, target.getX(),
                     target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
@@ -1574,8 +1598,8 @@ public class PowersStickyFingers extends NewPunchingStand {
                     this.self.getId(), restoredPart);
             S2CPacketUtil.sendGenericIntIntToAll(PacketDataIndex.S2C_ZIPPER_LIMB_ANIMATION,
                     this.self.getId(), restoredPart);
-            serverLevel.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                    SoundSource.PLAYERS, 1.0F, 1.25F);
+            serverLevel.playSound(null, this.self.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                    SoundSource.PLAYERS, 1.0F, 0.95F);
             serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, this.self.getX(),
                     this.self.getY() + this.self.getBbHeight() * 0.5D, this.self.getZ(),
                     16, 0.3D, 0.4D, 0.3D, 0.025D);
@@ -1615,8 +1639,8 @@ public class PowersStickyFingers extends NewPunchingStand {
                 donor.getId(), transfer.donorPart());
 
         reduceBleedByOne(player);
-        serverLevel.playSound(null, this.self.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.0F, 1.25F);
+        serverLevel.playSound(null, this.self.blockPosition(), ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.95F);
         serverLevel.sendParticles(ModParticles.ZIPPER_SPARK, this.self.getX(),
                 this.self.getY() + this.self.getBbHeight() * 0.55D, this.self.getZ(),
                 18, 0.3D, 0.4D, 0.3D, 0.025D);
@@ -1848,8 +1872,14 @@ public class PowersStickyFingers extends NewPunchingStand {
             created++;
         }
         this.setCooldown(PowerIndex.SKILL_4_GUARD, ZIPPER_POLE_COOLDOWN);
-        serverLevel.playSound(null, anchor, SoundEvents.ARMOR_EQUIP_CHAIN,
-                SoundSource.PLAYERS, 1.0F, 0.72F);
+        playZipperCollapseAnimation();
+        serverLevel.playSound(null, anchor, ModSounds.SF_ZIPPER_BREAK_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F);
+    }
+
+    private void playZipperCollapseAnimation() {
+        this.animateStand(StickyFingersEntity.ZIPPER_POLE_COLLAPSE);
+        zipperCollapseAnimTicks = 8;
     }
 
     private boolean isPoleCollapseCandidate(ServerLevel level, BlockPos pos, BlockState baseState,
@@ -1862,22 +1892,43 @@ public class PowersStickyFingers extends NewPunchingStand {
         return level.getBlockState(front).getCollisionShape(level, front).isEmpty();
     }
 
-    private void endDisassemble() {
-        if (disassembleTicks <= 0) return;
-        disassembleTicks = 0;
-        this.self.setInvulnerable(wasInvulnerable);
-        this.self.setInvisible(wasInvisible);
-    }
-
     private void startGuillotine() {
-        this.setCooldown(PowerIndex.SKILL_4, GUILLOTINE_COOLDOWN);
         if (this.self.level().isClientSide()) {
             return;
         }
+        EntityHitResult hit = MainUtil.rayCastEntityHitResult(this.self, 6.0F);
+        LivingEntity target = hit != null && hit.getEntity() instanceof LivingEntity living ? living : null;
+        if (!isValidGuillotineTarget(target)) {
+            AABB reach = this.self.getBoundingBox().inflate(GUILLOTINE_RADIUS, 1.5D, GUILLOTINE_RADIUS);
+            target = this.self.level().getEntitiesOfClass(LivingEntity.class, reach,
+                    this::isValidGuillotineTarget).stream()
+                    .min(java.util.Comparator.comparingDouble(this.self::distanceToSqr)).orElse(null);
+        }
+        if (target == null || this.getStandEntity(this.self) == null) return;
+
+        this.setCooldown(PowerIndex.SKILL_4, GUILLOTINE_COOLDOWN);
         guillotinePos = this.self.position();
-        guillotineTimer = GUILLOTINE_DELAY;
-        this.self.level().playSound(null, this.self.blockPosition(), SoundEvents.PISTON_EXTEND,
-                SoundSource.PLAYERS, 1.0F, 0.6F);
+        guillotineTarget = target;
+        guillotineTargetPosition = target.position();
+        Vec3 approach = new Vec3(this.self.getX() - target.getX(), 0.0D,
+                this.self.getZ() - target.getZ());
+        if (approach.lengthSqr() < 1.0E-4D) approach = new Vec3(0.0D, 0.0D, 1.0D);
+        approach = approach.normalize();
+        guillotineStandPosition = target.position().add(approach.scale(0.9D + target.getBbWidth() * 0.5D));
+        guillotineApproachTicks = 0;
+        guillotinePhase = 0;
+        if (target instanceof Mob mob) {
+            guillotineTargetWasNoAi = mob.isNoAi();
+            mob.setNoAi(true);
+            mob.getNavigation().stop();
+        }
+        guillotineTarget.setDeltaMovement(Vec3.ZERO);
+        guillotineTarget.hurtMarked = true;
+        guillotineTimer = 0;
+        this.animateStand(StickyFingersEntity.GUILLOTINE_PUNCH);
+        this.poseStand(OffsetIndex.LOOSE);
+        this.self.level().playSound(null, this.self.blockPosition(), ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 1.0F, 0.9F);
         blockEruption(guillotinePos, 30);
         renderGuillotineWarning(guillotinePos);
     }
@@ -1916,21 +1967,39 @@ public class PowersStickyFingers extends NewPunchingStand {
         if (guillotinePos == null || !(this.self.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        AABB area = new AABB(guillotinePos, guillotinePos).inflate(GUILLOTINE_RADIUS, 1.5D, GUILLOTINE_RADIUS);
-        for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, area)) {
-            if (target == this.self || !target.isAlive() || target instanceof StandEntity) {
-                continue;
-            }
-            if (StandDamageEntityAttack(target, getHeavyPunchStrength(target) * 1.5F, 0.2F, this.self)) {
-                MainUtil.makeBleed(target, GUILLOTINE_BLEED_LEVEL, GUILLOTINE_BLEED_TICKS, this.self);
-            }
+        LivingEntity target = guillotineTarget;
+        if (isValidGuillotineTarget(target)) {
+            float halfHealth = Math.max(1.0F, target.getMaxHealth() * 0.5F);
+            target.setHealth(Math.min(target.getHealth(), halfHealth));
+            showDismemberedPart(target, ZIPPER_PART_HEAD);
         }
-        serverLevel.playSound(null, this.self.blockPosition(), SoundEvents.IRON_TRAPDOOR_CLOSE,
-                SoundSource.PLAYERS, 1.4F, 0.5F);
-        serverLevel.playSound(null, this.self.blockPosition(), SoundEvents.SHEEP_SHEAR,
-                SoundSource.PLAYERS, 1.2F, 0.7F);
+        releaseGuillotineTarget();
+        serverLevel.playSound(null, this.self.blockPosition(), ModSounds.SF_HIT_ZIPPER_EVENT,
+                SoundSource.PLAYERS, 1.4F, 0.9F);
         blockEruption(guillotinePos, 20);
         guillotinePos = null;
+        if (getAnimation() == StickyFingersEntity.GUILLOTINE_PUNCH
+                || getAnimation() == StickyFingersEntity.GUILLOTINE_CHOP
+                || getAnimation() == StickyFingersEntity.GUILLOTINE_FULL) {
+            this.animateStand(StandEntity.IDLE);
+            this.poseStand(OffsetIndex.FOLLOW);
+        }
+    }
+
+    private boolean isValidGuillotineTarget(LivingEntity target) {
+        return target != null && target != this.self && target.isAlive()
+                && !(target instanceof StandEntity) && target.level() == this.self.level();
+    }
+
+    private void releaseGuillotineTarget() {
+        if (guillotineTarget instanceof Mob mob) mob.setNoAi(guillotineTargetWasNoAi);
+        guillotineTarget = null;
+        guillotineTargetPosition = null;
+        guillotineStandPosition = null;
+        guillotineTargetWasNoAi = false;
+        guillotineApproachTicks = 0;
+        guillotinePhase = 0;
+        guillotineTimer = 0;
     }
 
     @Override
@@ -1961,6 +2030,11 @@ public class PowersStickyFingers extends NewPunchingStand {
                 && getAnimation() == StickyFingersEntity.ZIPPER_FIST_IMPACT) {
             this.animateStand(StandEntity.IDLE);
             this.poseStand(OffsetIndex.FOLLOW);
+        }
+        if (!this.self.level().isClientSide() && zipperCollapseAnimTicks > 0
+                && --zipperCollapseAnimTicks <= 0
+                && getAnimation() == StickyFingersEntity.ZIPPER_POLE_COLLAPSE) {
+            this.animateStand(StandEntity.IDLE);
         }
         // The stand can keep following a latched fist while the grapple pulls the user.
         // When the fist is recalled or times out, ease the segmented arm back to its normal pose.
@@ -1996,6 +2070,7 @@ public class PowersStickyFingers extends NewPunchingStand {
                     maxReleaseTargetId = -1;
                     maxReleaseLevel = 0;
                     maxReleaseDamageRemaining = 0.0F;
+                    finishDisassemblyAnimation();
                 } else if (--maxReleaseTicks <= 0) {
                     applyDismembermentForLevel(target, maxReleaseLevel);
                     removeTag(target);
@@ -2006,9 +2081,9 @@ public class PowersStickyFingers extends NewPunchingStand {
                                 target.getX(), target.getY() + target.getBbHeight() * 0.5D,
                                 target.getZ(), 48, 0.65D, 0.8D, 0.65D, 0.08D);
                     }
-                    this.self.level().playSound(null, target.blockPosition(), SoundEvents.IRON_TRAPDOOR_CLOSE,
-                            SoundSource.PLAYERS, 1.5F, 0.5F);
+                    playStickyHeavyHit(target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ());
                     maxReleaseTargetId = -1;
+                    finishDisassemblyAnimation();
                 } else if (maxReleaseTicks % 4 == 0) {
                     int openedPartIndex = (MAX_RELEASE_WINDUP - maxReleaseTicks) / 4 - 1;
                     int[] zipperParts = { ZIPPER_PART_RIGHT_ARM, ZIPPER_PART_LEFT_ARM,
@@ -2033,7 +2108,6 @@ public class PowersStickyFingers extends NewPunchingStand {
                 }
             }
         }
-        if (disassembleTicks > 0 && --disassembleTicks <= 0) endDisassemble();
         if (!this.self.level().isClientSide() && barrageTimer > 0) {
             tickBarrageAnimation();
         }
@@ -2048,14 +2122,67 @@ public class PowersStickyFingers extends NewPunchingStand {
             long now = this.self.level().getGameTime();
             STOLEN_LIMB_LOCKS.entrySet().removeIf(entry -> entry.getValue() <= now);
         }
-        if (!this.self.level().isClientSide() && guillotineTimer > 0) {
-            guillotineTimer--;
-            if (guillotineTimer % 3 == 0 && guillotinePos != null) {
+        if (!this.self.level().isClientSide() && guillotineTarget != null) {
+            if (isValidGuillotineTarget(guillotineTarget) && this.getStandEntity(this.self) != null) {
+                guillotineTarget.setPos(guillotineTargetPosition.x,
+                        guillotineTargetPosition.y, guillotineTargetPosition.z);
+                guillotineTarget.setDeltaMovement(Vec3.ZERO);
+                guillotineTarget.hurtMarked = true;
+                if (guillotineTarget instanceof Mob mob) mob.getNavigation().stop();
+                StandEntity stand = this.getStandEntity(this.self);
+                if (stand != null && guillotineStandPosition != null) {
+                    Vec3 offset = guillotineStandPosition.subtract(stand.position());
+                    double distance = offset.length();
+                    if (guillotinePhase == 0 && distance > 1.35D) {
+                        Vec3 step = offset.scale(Math.min(0.30D, distance) / distance);
+                        stand.setPos(stand.getX() + step.x, stand.getY() + step.y, stand.getZ() + step.z);
+                    }
+                    float yaw = (float) (Mth.atan2(guillotineTarget.getZ() - stand.getZ(),
+                            guillotineTarget.getX() - stand.getX()) * 57.29577951308232D) - 90.0F;
+                    stand.setYRot(yaw);
+                    stand.setYBodyRot(yaw);
+                    stand.setXRot(0.0F);
+                    this.poseStand(OffsetIndex.LOOSE);
+                    guillotineApproachTicks++;
+                    if (guillotinePhase == 0 && (distance <= 1.35D || guillotineApproachTicks >= 60)) {
+                        stand.setPos(guillotineStandPosition.x, guillotineStandPosition.y,
+                                guillotineStandPosition.z);
+                        guillotinePhase = 1;
+                        guillotineTimer = 10;
+                    }
+                }
+            } else {
+                releaseGuillotineTarget();
+                guillotinePos = null;
+                this.animateStand(StandEntity.IDLE);
+                this.poseStand(OffsetIndex.FOLLOW);
+            }
+            if (guillotinePhase > 0 && guillotineTimer > 0) {
+                guillotineTimer--;
+                if (guillotineTimer <= 0) {
+                    if (guillotinePhase == 1) {
+                        this.animateStand(StickyFingersEntity.GUILLOTINE_CHOP);
+                        guillotinePhase = 2;
+                        guillotineTimer = 16;
+                    } else if (guillotinePhase == 2) {
+                        this.animateStand(StickyFingersEntity.GUILLOTINE_FULL);
+                        guillotinePhase = 3;
+                        guillotineTimer = 26;
+                    } else {
+                        closeGuillotine();
+                    }
+                }
+            }
+            if (guillotineApproachTicks % 3 == 0 && guillotinePos != null) {
                 renderGuillotineWarning(guillotinePos);
             }
-            if (guillotineTimer <= 0) {
-                closeGuillotine();
-            }
+        }
+    }
+
+    private void finishDisassemblyAnimation() {
+        if (getAnimation() == StickyFingersEntity.DEATH_BY_DISASSEMBLY) {
+            this.animateStand(StandEntity.IDLE);
+            this.poseStand(OffsetIndex.FOLLOW);
         }
     }
 
@@ -2085,16 +2212,16 @@ public class PowersStickyFingers extends NewPunchingStand {
             setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP_SKILL, PowerIndex.SKILL_1);
         }
 
-        if (guarding) {
-            setSkillIcon(context, x, y, 2, StandIcons.KING_CRIMSON_HANDS_ACTIVE, PowerIndex.SKILL_2_GUARD);
-        } else if (sneaking) {
+        if (sneaking) {
             setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_2_SNEAK);
-        } else {
+        } else if (!guarding) {
             setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST_LAUNCH_SKILL, PowerIndex.SKILL_2);
         }
 
         if (guarding) {
-            setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_ZIP_SKILL, PowerIndex.SKILL_3_GUARD);
+            setSkillIcon(context, x, y, 3, areZipMarksEnabled()
+                    ? StandIcons.STICKY_FINGERS_ZIP_TOGGLE_ON : StandIcons.STICKY_FINGERS_ZIP_TOGGLE_OFF,
+                    PowerIndex.SKILL_3_GUARD);
         } else if (sneaking) {
             setSkillIcon(context, x, y, 3, StandIcons.STICKY_FINGERS_UNZIP, PowerIndex.SKILL_3);
         } else {
@@ -2124,8 +2251,6 @@ public class PowersStickyFingers extends NewPunchingStand {
                 "instruction.roundabout.press_attack", StandIcons.STICKY_FINGERS_PUNCH, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c0, r1, 0, "ability.roundabout.guard",
                 "instruction.roundabout.hold_block", StandIcons.STICKY_FINGERS_GUARD, 0, level, bypass));
-        list.add(drawSingleGUIIcon(context, 18, c0, r2, 0, "ability.roundabout.sticky_kick",
-                "instruction.roundabout.press_attack_crouch", StandIcons.KING_CRIMSON_FINAL_PUNCH, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r0, 0, "ability.roundabout.barrage",
                 "instruction.roundabout.barrage", StandIcons.STICKY_FINGERS_BARRAGE_SKILL, 0, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c1, r1, 0, "ability.roundabout.mining",
@@ -2144,15 +2269,14 @@ public class PowersStickyFingers extends NewPunchingStand {
                 "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST_LAUNCH_SKILL, 2, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c3, r1, 0, "ability.roundabout.zipper_release",
                 "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_ZIPPER_MASS, 2, level, bypass));
-        list.add(drawSingleGUIIcon(context, 18, c3, r2, 0, "ability.roundabout.zipper_disassemble",
-                "instruction.roundabout.press_skill_block", StandIcons.KING_CRIMSON_HANDS_ACTIVE, 2, level, bypass));
 
         list.add(drawSingleGUIIcon(context, 18, c4, r0, 0, "ability.roundabout.zipper_ride",
                 "instruction.roundabout.press_skill", StandIcons.STICKY_FINGERS_FIST, 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c4, r1, 0, "ability.roundabout.zipper_latch",
                 "instruction.roundabout.press_skill_crouch", StandIcons.STICKY_FINGERS_UNZIP, 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c4, r2, 0, "ability.roundabout.zipper_toggle",
-                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_ZIP_SKILL,
+                "instruction.roundabout.press_skill_block", areZipMarksEnabled()
+                        ? StandIcons.STICKY_FINGERS_ZIP_TOGGLE_ON : StandIcons.STICKY_FINGERS_ZIP_TOGGLE_OFF,
                 3, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c5, r0, 0, "ability.roundabout.vault_kc",
                 "instruction.roundabout.press_skill_air", StandIcons.STICKY_FINGERS_VAULT, 3, level, bypass));

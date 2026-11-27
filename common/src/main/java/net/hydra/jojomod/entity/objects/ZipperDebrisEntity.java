@@ -5,6 +5,7 @@ import net.hydra.jojomod.entity.stand.StandEntity;
 import net.hydra.jojomod.event.powers.ModDamageTypes;
 import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.minecraft.core.Direction;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -16,8 +17,10 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,12 +33,23 @@ public class ZipperDebrisEntity extends Entity {
 
     protected static final EntityDataAccessor<BlockState> BLOCK = SynchedEntityData.defineId(ZipperDebrisEntity.class,
             EntityDataSerializers.BLOCK_STATE);
+    private static final EntityDataAccessor<Integer> ORIGIN_X = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> ORIGIN_Y = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> ORIGIN_Z = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> HALF = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> SPLIT_AXIS = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> ZIPPER_FACE = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> SPLIT_PIECE = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> RETURNING = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Integer> RETURN_TICKS = SynchedEntityData.defineId(ZipperDebrisEntity.class, EntityDataSerializers.INT);
 
     public static final int MAX_LIFE = 60;
 
     private UUID ownerUUID = null;
     private float damage = 1.5F;
     private int life = 0;
+    private int returnTicks = 0;
+    private Vec3 returnStart = Vec3.ZERO;
 
     public ZipperDebrisEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -60,13 +74,75 @@ public class ZipperDebrisEntity extends Entity {
         level.addFreshEntity(debris);
     }
 
+    /** Creates two harmless, persistent halves for a block opened by Unzip. */
+    public static void splitBlock(ServerLevel level, BlockPos origin, BlockState state, Direction face) {
+        if (state.isAir() || state.getDestroySpeed(level, origin) < 0) return;
+        Direction.Axis axis = face.getAxis() == Direction.Axis.X ? Direction.Axis.Z : Direction.Axis.X;
+        for (int half = 0; half < 2; half++) {
+            ZipperDebrisEntity piece = new ZipperDebrisEntity(ModEntities.ZIPPER_DEBRIS, level);
+            piece.entityData.set(BLOCK, state);
+            piece.entityData.set(ORIGIN_X, origin.getX());
+            piece.entityData.set(ORIGIN_Y, origin.getY());
+            piece.entityData.set(ORIGIN_Z, origin.getZ());
+            piece.entityData.set(HALF, half);
+            piece.entityData.set(SPLIT_AXIS, axis == Direction.Axis.X ? 0 : 2);
+            piece.entityData.set(ZIPPER_FACE, face.get3DDataValue());
+            piece.entityData.set(SPLIT_PIECE, true);
+            piece.refreshDimensions();
+            double x = origin.getX() + (axis == Direction.Axis.X ? 0.25D + half * 0.5D : 0.5D);
+            double z = origin.getZ() + (axis == Direction.Axis.Z ? 0.25D + half * 0.5D : 0.5D);
+            piece.setPos(x, origin.getY(), z);
+            piece.setDeltaMovement((half == 0 ? -0.06D : 0.06D), 0.18D, 0.0D);
+            level.addFreshEntity(piece);
+        }
+    }
+
+    public static void beginReturn(ServerLevel level, BlockPos origin) {
+        for (Entity entity : level.getAllEntities()) {
+            if (entity instanceof ZipperDebrisEntity piece && piece.isSplitPiece()
+                    && piece.getOrigin().equals(origin)) {
+                piece.beginReturning();
+            }
+        }
+    }
+
+    private void beginReturning() {
+        this.returnStart = this.position();
+        this.entityData.set(RETURNING, true);
+        this.returnTicks = 8;
+        this.entityData.set(RETURN_TICKS, this.returnTicks);
+        this.setDeltaMovement(Vec3.ZERO);
+    }
+
     @Override
     protected void defineSynchedData() {
         this.entityData.define(BLOCK, Blocks.STONE.defaultBlockState());
+        this.entityData.define(ORIGIN_X, 0);
+        this.entityData.define(ORIGIN_Y, 0);
+        this.entityData.define(ORIGIN_Z, 0);
+        this.entityData.define(HALF, 0);
+        this.entityData.define(SPLIT_AXIS, 0);
+        this.entityData.define(ZIPPER_FACE, Direction.NORTH.get3DDataValue());
+        this.entityData.define(SPLIT_PIECE, false);
+        this.entityData.define(RETURNING, false);
+        this.entityData.define(RETURN_TICKS, 0);
     }
 
     public BlockState getBlockState() {
         return this.entityData.get(BLOCK);
+    }
+
+    public boolean isSplitPiece() { return this.entityData.get(SPLIT_PIECE); }
+    public boolean isReturning() { return this.entityData.get(RETURNING); }
+    public int getReturnTicks() { return this.entityData.get(RETURN_TICKS); }
+    public int getHalf() { return this.entityData.get(HALF); }
+    public Direction.Axis getSplitAxis() { return this.entityData.get(SPLIT_AXIS) == 2 ? Direction.Axis.Z : Direction.Axis.X; }
+    public Direction getZipperFace() { return Direction.from3DDataValue(this.entityData.get(ZIPPER_FACE)); }
+    public BlockPos getOrigin() { return new BlockPos(this.entityData.get(ORIGIN_X), this.entityData.get(ORIGIN_Y), this.entityData.get(ORIGIN_Z)); }
+
+    @Override
+    public EntityDimensions getDimensions(Pose pose) {
+        return isSplitPiece() ? EntityDimensions.scalable(0.5F, 1.0F) : super.getDimensions(pose);
     }
 
     @Override
@@ -82,6 +158,34 @@ public class ZipperDebrisEntity extends Entity {
     @Override
     public void tick() {
         super.tick();
+        if (isSplitPiece()) {
+            if (isReturning()) {
+                if (this.level().isClientSide()) return;
+                BlockPos origin = getOrigin();
+                double targetX = origin.getX() + (getSplitAxis() == Direction.Axis.X ? 0.25D + getHalf() * 0.5D : 0.5D);
+                double targetY = origin.getY();
+                double targetZ = origin.getZ() + (getSplitAxis() == Direction.Axis.Z ? 0.25D + getHalf() * 0.5D : 0.5D);
+                double progress = Math.min(1.0D, (9 - returnTicks) / 8.0D);
+                this.setPos(returnStart.x + (targetX - returnStart.x) * progress,
+                        returnStart.y + (targetY - returnStart.y) * progress,
+                        returnStart.z + (targetZ - returnStart.z) * progress);
+                if (--returnTicks <= 0) this.discard();
+                else this.entityData.set(RETURN_TICKS, returnTicks);
+                return;
+            }
+            if (this.level().isClientSide()) return;
+            if (this.level() instanceof ServerLevel serverLevel && this.tickCount % 8 == 0) {
+                BlockPos origin = getOrigin();
+                serverLevel.sendParticles(ParticleTypes.END_ROD, origin.getX() + 0.5D,
+                        origin.getY() + 0.35D + this.random.nextDouble() * 0.3D,
+                        origin.getZ() + 0.5D, 1, 0.03D, 0.08D, 0.03D, 0.0D);
+            }
+            Vec3 fallingMotion = this.getDeltaMovement();
+            this.setDeltaMovement(fallingMotion.x * 0.96D, fallingMotion.y - 0.04D, fallingMotion.z * 0.96D);
+            this.move(MoverType.SELF, this.getDeltaMovement());
+            if (this.onGround() || this.verticalCollision) this.setDeltaMovement(this.getDeltaMovement().x, 0.0D, this.getDeltaMovement().z);
+            return;
+        }
         life++;
         Vec3 motion = this.getDeltaMovement();
         this.setDeltaMovement(motion.x * 0.99D, motion.y - 0.04D, motion.z * 0.99D);

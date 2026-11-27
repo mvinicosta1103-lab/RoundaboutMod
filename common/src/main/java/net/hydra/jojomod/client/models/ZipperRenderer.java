@@ -51,10 +51,16 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
     @Override
     public boolean shouldRender(ZipperEntity entity, Frustum frustum,
                                 double cameraX, double cameraY, double cameraZ) {
-        if (entity.getMergedRenderLeader() != entity
+        boolean renderWallZippersIndividually = entity.getFace().getAxis() != Direction.Axis.Y
+                && entity.getVehicle() == null;
+        if ((!renderWallZippersIndividually && entity.getMergedRenderLeader() != entity)
                 || entity.getState() == ZipperEntity.STATE_HIDING
+                || entity.getState() == ZipperEntity.STATE_TUNNEL
                 || entity.isHiddenFromLocalPlayer()) {
             return false;
+        }
+        if (renderWallZippersIndividually) {
+            return super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ);
         }
         if (super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ)) return true;
 
@@ -73,11 +79,14 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
     @Override
     public void render(ZipperEntity entity, float yaw, float partialTicks, PoseStack poseStack,
                        MultiBufferSource buffer, int light) {
-        if (entity.getMergedRenderLeader() != entity) {
+        boolean renderWallZippersIndividually = entity.getFace().getAxis() != Direction.Axis.Y
+                && entity.getVehicle() == null;
+        if (!renderWallZippersIndividually && entity.getMergedRenderLeader() != entity) {
             return;
         }
         int state = entity.getState();
-        if (state == ZipperEntity.STATE_HIDING || entity.isHiddenFromLocalPlayer()) {
+        if (state == ZipperEntity.STATE_HIDING || state == ZipperEntity.STATE_TUNNEL
+                || entity.isHiddenFromLocalPlayer()) {
             return;
         }
         float rawAge = entity.tickCount - entity.getStateStart() + partialTicks;
@@ -108,7 +117,9 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         float baseLength = (flat || entity.isMini()) ? 1.0F : 2.0F;
         // Imported art is 16x48: retain its 1:3 width-to-length ratio on surfaces.
         float baseHalfWidth = baseLength / 6.0F;
-        ZipperEntity.MergeRenderLayout layout = entity.getMergeRenderLayout(baseHalfWidth, baseLength, true);
+        ZipperEntity.MergeRenderLayout layout = renderWallZippersIndividually
+                ? new ZipperEntity.MergeRenderLayout(0.0F, 0.0F, baseHalfWidth * 2.0F, baseLength, 0.0F)
+                : entity.getMergeRenderLayout(baseHalfWidth, baseLength, true);
         float length = layout.length();
         float widthScale = layout.width() / (baseHalfWidth * 2.0F);
         float lengthScale = length / baseLength;
@@ -127,15 +138,6 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
         int dimensionFrame = ((int) ((entity.tickCount + partialTicks) / 2.0F)) % DIMENSION_FRAME_COUNT;
         if (flat) {
             List<ZipperEntity.ZipperPathCell> path = entity.getMergedFloorPath();
-            if (path.size() > 1) {
-                renderFloorPath(path, open, state, state == ZipperEntity.STATE_CLOSING ? age : -1.0F,
-                        entity.tickCount, partialTicks, light, poseStack, buffer);
-                poseStack.popPose();
-                super.render(entity, yaw, partialTicks, poseStack, buffer, light);
-                return;
-            }
-        } else if (entity.getVehicle() == null) {
-            List<ZipperEntity.ZipperPathCell> path = entity.getMergedWallPath();
             if (path.size() > 1) {
                 renderFloorPath(path, open, state, state == ZipperEntity.STATE_CLOSING ? age : -1.0F,
                         entity.tickCount, partialTicks, light, poseStack, buffer);

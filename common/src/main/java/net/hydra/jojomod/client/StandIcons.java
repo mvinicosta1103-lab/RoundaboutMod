@@ -715,6 +715,10 @@ public class StandIcons {
             "textures/gui/icons/sticky_fingers/fist_launch_skill.png");
     public static final ResourceLocation STICKY_FINGERS_ZIP_SKILL = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/sticky_fingers/zip_skill.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIP_TOGGLE_ON = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zip_toggle_on.png");
+    public static final ResourceLocation STICKY_FINGERS_ZIP_TOGGLE_OFF = new ResourceLocation(Roundabout.MOD_ID,
+            "textures/gui/icons/sticky_fingers/zip_toggle_off.png");
     public static final ResourceLocation STICKY_FINGERS_BARRAGE_SKILL = new ResourceLocation(Roundabout.MOD_ID,
             "textures/gui/icons/sticky_fingers/barrage_skill.png");
 

@@ -888,7 +888,7 @@ public class ModBlocks {
                 return 1;
             }).noParticlesOnBreak().pushReaction(PushReaction.DESTROY).sound(SoundType.EMPTY));
     public static ZipperSpaceBlock ZIPPER_SPACE_BLOCK_PROPERTIES = new ZipperSpaceBlock(
-            BlockBehaviour.Properties.of().mapColor(MapColor.NONE).noCollission().noOcclusion().strength(-1.0F, 3600000.0F)
+            BlockBehaviour.Properties.of().mapColor(MapColor.NONE).noOcclusion().strength(-1.0F, 3600000.0F)
                     .noLootTable().isSuffocating((state, getter, pos) -> false).isViewBlocking((state, getter, pos) -> false)
                     .pushReaction(PushReaction.BLOCK).sound(SoundType.EMPTY));
     //copying the bubble scaffold code for diver down's limb, but removing the speed reducer since the tradeoff is that you're only limited to 4, and it's only placable on walls/floor.

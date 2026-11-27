@@ -930,6 +930,24 @@ public class ForgeSounds {
             register(ModSounds.DREAD_SUMMON, ModSounds.DREAD_SUMMON_ID);
     public static final RegistryObject<SoundEvent> STAND_BARRAGE_HIT2_EVENT =
             register(ModSounds.STAND_BARRAGE_HIT2, ModSounds.STAND_BARRAGE_HIT2_ID);
+    public static final RegistryObject<SoundEvent> SF_HEAVY_HIT_EVENT =
+            register(ModSounds.SF_HEAVY_HIT, ModSounds.SF_HEAVY_HIT_ID);
+    public static final RegistryObject<SoundEvent> SF_BRUNO_ARI_EVENT =
+            register(ModSounds.SF_BRUNO_ARI, ModSounds.SF_BRUNO_ARI_ID);
+    public static final RegistryObject<SoundEvent> SF_HIT_1_EVENT =
+            register(ModSounds.SF_HIT_1, ModSounds.SF_HIT_1_ID);
+    public static final RegistryObject<SoundEvent> SF_HIT_2_EVENT =
+            register(ModSounds.SF_HIT_2, ModSounds.SF_HIT_2_ID);
+    public static final RegistryObject<SoundEvent> SF_HIT_3_EVENT =
+            register(ModSounds.SF_HIT_3, ModSounds.SF_HIT_3_ID);
+    public static final RegistryObject<SoundEvent> SF_HIT_4_EVENT =
+            register(ModSounds.SF_HIT_4, ModSounds.SF_HIT_4_ID);
+    public static final RegistryObject<SoundEvent> SF_ZIPPER_BREAK_EVENT =
+            register(ModSounds.SF_ZIPPER_BREAK, ModSounds.SF_ZIPPER_BREAK_ID);
+    public static final RegistryObject<SoundEvent> SF_HIT_ZIPPER_EVENT =
+            register(ModSounds.SF_HIT_ZIPPER, ModSounds.SF_HIT_ZIPPER_ID);
+    public static final RegistryObject<SoundEvent> SF_SUMMON_EVENT =
+            register(ModSounds.SF_SUMMON, ModSounds.SF_SUMMON_ID);
     public static final RegistryObject<SoundEvent> STAND_BARRAGE_END_EVENT =
             register(ModSounds.STAND_BARRAGE_END, ModSounds.STAND_BARRAGE_END_ID);
     public static final RegistryObject<SoundEvent> STAND_GUARD_SOUND_EVENT =

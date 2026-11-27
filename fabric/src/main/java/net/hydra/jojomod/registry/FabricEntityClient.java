@@ -420,6 +420,7 @@ public class FabricEntityClient {
         BlockEntityRenderers.register(ModBlocks.SC_RAPIER_PLATFORM_BLOCK_ENTITY, SilverChariotRapierPlatformBlockEntityRenderer::new);
         BlockEntityRenderers.register(ModBlocks.D4C_PORTAL_BLOCK_ENTITY, D4CPortalBlockEntityRenderer::new);
         BlockEntityRenderers.register(ModBlocks.INVISIBLE_BLOCK_ENTITY, InvisiBlockEntityRenderer::new);
+        BlockEntityRenderers.register(ModBlocks.ZIPPER_SPACE_BLOCK_ENTITY, ZipperSpaceBlockEntityRenderer::new);
         BlockEntityRenderers.register(ModBlocks.OASIS_MUD_BLOCK_ENTITY, OasisMudBlockEntityRenderer::new);
         BlockEntityRenderers.register(ModBlocks.HAND_BLOCK_ENTITY, HandRenderer::new);
         BlockEntityRenderers.register(ModBlocks.HALLUCINATORY_ACID_BLOCK_ENTITY,

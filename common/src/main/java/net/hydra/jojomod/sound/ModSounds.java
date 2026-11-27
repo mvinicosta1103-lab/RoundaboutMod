@@ -829,6 +829,34 @@ public class ModSounds {
     public static final ResourceLocation STAND_BARRAGE_HIT2_ID = new ResourceLocation(Roundabout.MOD_ID+":"+STAND_BARRAGE_HIT2);
     public static SoundEvent STAND_BARRAGE_HIT2_EVENT = SoundEvent.createVariableRangeEvent(STAND_BARRAGE_HIT2_ID);
 
+    public static final String SF_HEAVY_HIT = "sf_heavy_hit";
+    public static final ResourceLocation SF_HEAVY_HIT_ID = new ResourceLocation(Roundabout.MOD_ID, SF_HEAVY_HIT);
+    public static final SoundEvent SF_HEAVY_HIT_EVENT = SoundEvent.createVariableRangeEvent(SF_HEAVY_HIT_ID);
+    public static final String SF_BRUNO_ARI = "bruno_ari";
+    public static final ResourceLocation SF_BRUNO_ARI_ID = new ResourceLocation(Roundabout.MOD_ID, SF_BRUNO_ARI);
+    public static final SoundEvent SF_BRUNO_ARI_EVENT = SoundEvent.createVariableRangeEvent(SF_BRUNO_ARI_ID);
+    public static final String SF_HIT_1 = "sf_hit_1";
+    public static final ResourceLocation SF_HIT_1_ID = new ResourceLocation(Roundabout.MOD_ID, SF_HIT_1);
+    public static final SoundEvent SF_HIT_1_EVENT = SoundEvent.createVariableRangeEvent(SF_HIT_1_ID);
+    public static final String SF_HIT_2 = "sf_hit_2";
+    public static final ResourceLocation SF_HIT_2_ID = new ResourceLocation(Roundabout.MOD_ID, SF_HIT_2);
+    public static final SoundEvent SF_HIT_2_EVENT = SoundEvent.createVariableRangeEvent(SF_HIT_2_ID);
+    public static final String SF_HIT_3 = "sf_hit_3";
+    public static final ResourceLocation SF_HIT_3_ID = new ResourceLocation(Roundabout.MOD_ID, SF_HIT_3);
+    public static final SoundEvent SF_HIT_3_EVENT = SoundEvent.createVariableRangeEvent(SF_HIT_3_ID);
+    public static final String SF_HIT_4 = "sf_hit_4";
+    public static final ResourceLocation SF_HIT_4_ID = new ResourceLocation(Roundabout.MOD_ID, SF_HIT_4);
+    public static final SoundEvent SF_HIT_4_EVENT = SoundEvent.createVariableRangeEvent(SF_HIT_4_ID);
+    public static final String SF_ZIPPER_BREAK = "sf_zipper_break";
+    public static final ResourceLocation SF_ZIPPER_BREAK_ID = new ResourceLocation(Roundabout.MOD_ID, SF_ZIPPER_BREAK);
+    public static final SoundEvent SF_ZIPPER_BREAK_EVENT = SoundEvent.createVariableRangeEvent(SF_ZIPPER_BREAK_ID);
+    public static final String SF_HIT_ZIPPER = "sf_hit_zipper";
+    public static final ResourceLocation SF_HIT_ZIPPER_ID = new ResourceLocation(Roundabout.MOD_ID, SF_HIT_ZIPPER);
+    public static final SoundEvent SF_HIT_ZIPPER_EVENT = SoundEvent.createVariableRangeEvent(SF_HIT_ZIPPER_ID);
+    public static final String SF_SUMMON = "sf_summon";
+    public static final ResourceLocation SF_SUMMON_ID = new ResourceLocation(Roundabout.MOD_ID, SF_SUMMON);
+    public static final SoundEvent SF_SUMMON_EVENT = SoundEvent.createVariableRangeEvent(SF_SUMMON_ID);
+
     public static final String STAND_BARRAGE_END = "stand_barrage_end";
     public static final ResourceLocation STAND_BARRAGE_END_ID = new ResourceLocation(Roundabout.MOD_ID+":"+STAND_BARRAGE_END);
     public static SoundEvent STAND_BARRAGE_END_EVENT = SoundEvent.createVariableRangeEvent(STAND_BARRAGE_END_ID);

@@ -3,6 +3,8 @@ package net.hydra.jojomod.mixin.jumpin_jack_flash;
 import net.hydra.jojomod.event.powers.jumpingJackFlash.ZeroGravityAccess;
 import net.hydra.jojomod.event.powers.jumpingJackFlash.ZeroGravityState;
 import net.hydra.jojomod.event.powers.jumpingJackFlash.ZeroGravitySystem;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
+import net.hydra.jojomod.access.IStickyFingersDismemberment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.Input;
 import net.minecraft.client.player.KeyboardInput;
@@ -25,6 +27,13 @@ public abstract class KeyboardInputMixin extends Input {
 
         if (player == null) {
             return;
+        }
+
+        if (player instanceof IStickyFingersDismemberment dismemberment
+                && (dismemberment.roundabout$getStickyFingersDismemberment()
+                & PowersStickyFingers.ZIPPER_PART_HEAD) != 0) {
+            this.forwardImpulse = -this.forwardImpulse;
+            this.leftImpulse = -this.leftImpulse;
         }
 
         if (!(player instanceof ZeroGravityAccess access)) {

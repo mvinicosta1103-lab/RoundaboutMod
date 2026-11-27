@@ -115,8 +115,9 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
 
     @Unique private boolean roundabout$zipperNoPhysicsApplied;
     @Unique private boolean roundabout$previousNoPhysics;
-    @Unique private boolean roundabout$previousNoGravity;
     @Unique private float roundabout$previousStepHeight;
+    @Unique private boolean roundabout$headlessMobNoAiSaved;
+    @Unique private boolean roundabout$headlessMobPreviousNoAi;
     @Shadow
     public abstract ItemStack getItemInHand(InteractionHand $$0);
 
@@ -2708,6 +2709,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
         saved.putInt("RoundaboutStickyGraftMask", roundabout$getStickyFingersGraftMask());
         saved.putString("RoundaboutStickyGraftData", roundabout$getStickyFingersGraftData());
         saved.putInt("RoundaboutStickyAutoUnzipConfig", roundabout$getStickyFingersAutoUnzipConfig());
+        saved.putBoolean("RoundaboutStickyHeadlessMobNoAiSaved", roundabout$headlessMobNoAiSaved);
+        saved.putBoolean("RoundaboutStickyHeadlessMobPreviousNoAi", roundabout$headlessMobPreviousNoAi);
         return saved;
     }
 
@@ -2720,6 +2723,8 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
             roundabout$setStickyFingersGraftMask($$0.getInt("RoundaboutStickyGraftMask"));
             roundabout$setStickyFingersGraftData($$0.getString("RoundaboutStickyGraftData"));
             roundabout$setStickyFingersAutoUnzipConfig($$0.getInt("RoundaboutStickyAutoUnzipConfig"));
+            roundabout$headlessMobNoAiSaved = $$0.getBoolean("RoundaboutStickyHeadlessMobNoAiSaved");
+            roundabout$headlessMobPreviousNoAi = $$0.getBoolean("RoundaboutStickyHeadlessMobPreviousNoAi");
         } finally {
             roundabout$loadingStandData = false;
         }
@@ -2811,7 +2816,6 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
         if (roundabout$isInZipperDimension()) {
             if (!roundabout$zipperNoPhysicsApplied) {
                 roundabout$previousNoPhysics = this.noPhysics;
-                roundabout$previousNoGravity = this.isNoGravity();
                 roundabout$previousStepHeight = ((net.hydra.jojomod.mixin.access.AccessEntity) (Object) this)
                         .roundabout$getMaxUpStep();
                 roundabout$zipperNoPhysicsApplied = true;
@@ -2826,12 +2830,42 @@ public abstract class StandUserEntity extends Entity implements StandUser, IStic
             }
         } else if (roundabout$zipperNoPhysicsApplied) {
             this.noPhysics = roundabout$previousNoPhysics;
-            this.setNoGravity(roundabout$previousNoGravity);
+            // Leaving the zipper always restores world gravity. Some mobs have
+            // noGravity enabled by their original state, which made them float
+            // after being ejected from the zipper passage.
+            this.setNoGravity(false);
             ((net.hydra.jojomod.mixin.access.AccessEntity) (Object) this)
                     .roundabout$setMaxUpStep(roundabout$previousStepHeight);
             roundabout$zipperNoPhysicsApplied = false;
         }
         int mask = roundabout$getStickyFingersDismemberment();
+        boolean headMissing = (mask & PowersStickyFingers.ZIPPER_PART_HEAD) != 0;
+        if (!entity.level().isClientSide()) {
+            if (entity instanceof Mob mob) {
+                if (headMissing && !roundabout$headlessMobNoAiSaved) {
+                    roundabout$headlessMobPreviousNoAi = mob.isNoAi();
+                    roundabout$headlessMobNoAiSaved = true;
+                }
+                if (headMissing) {
+                    mob.getNavigation().stop();
+                    mob.setNoAi(true);
+                } else if (roundabout$headlessMobNoAiSaved) {
+                    mob.setNoAi(roundabout$headlessMobPreviousNoAi);
+                    roundabout$headlessMobNoAiSaved = false;
+                }
+            }
+            if (entity instanceof Player) {
+                if (headMissing) {
+                    MobEffectInstance confusion = entity.getEffect(MobEffects.CONFUSION);
+                    if (confusion == null || confusion.getDuration() < 30) {
+                        entity.addEffect(new MobEffectInstance(MobEffects.CONFUSION,
+                                60, 0, false, false, true));
+                    }
+                } else if (entity.hasEffect(MobEffects.CONFUSION)) {
+                    entity.removeEffect(MobEffects.CONFUSION);
+                }
+            }
+        }
         int legs = PowersStickyFingers.ZIPPER_PART_LEFT_LEG | PowersStickyFingers.ZIPPER_PART_RIGHT_LEG;
         int arms = PowersStickyFingers.ZIPPER_PART_LEFT_ARM | PowersStickyFingers.ZIPPER_PART_RIGHT_ARM;
         boolean legless = (mask & legs) == legs;
