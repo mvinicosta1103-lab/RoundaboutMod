@@ -114,7 +114,9 @@ public class ZipperRenderer extends EntityRenderer<ZipperEntity> {
 
         Direction face = entity.getFace();
         boolean flat = face.getAxis() == Direction.Axis.Y && entity.getVehicle() == null;
-        float baseLength = (flat || entity.isMini()) ? 1.0F : 2.0F;
+        // Surface zippers occupy one block. The previous two-block wall sprite
+        // overlapped its neighbors, making a removed middle segment look intact.
+        float baseLength = (flat || entity.isMini() || renderWallZippersIndividually) ? 1.0F : 2.0F;
         // Imported art is 16x48: retain its 1:3 width-to-length ratio on surfaces.
         float baseHalfWidth = baseLength / 6.0F;
         ZipperEntity.MergeRenderLayout layout = renderWallZippersIndividually

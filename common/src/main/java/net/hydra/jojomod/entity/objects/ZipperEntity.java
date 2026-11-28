@@ -88,7 +88,6 @@ public class ZipperEntity extends Entity {
     public static final int TUNNEL_DEPTH_WALL = 4;
     public static final int TUNNEL_DEPTH_FLOOR = 4;
     public static final int MAX_SWALLOWED = 3;
-    public static final double ZIPPER_LINK_DISTANCE = 3.0D;
     private static final int MAX_CONNECTED_ZIPPERS = 64;
 
     protected static final EntityDataAccessor<Integer> STATE = SynchedEntityData.defineId(ZipperEntity.class,
@@ -243,7 +242,7 @@ public class ZipperEntity extends Entity {
         pending.add(this);
         for (int index = 0; index < pending.size() && found.size() < MAX_CONNECTED_ZIPPERS; index++) {
             ZipperEntity current = pending.get(index);
-            AABB search = current.getBoundingBox().inflate(ZIPPER_LINK_DISTANCE + 2.1D);
+            AABB search = current.getBoundingBox().inflate(2.1D);
             for (ZipperEntity candidate : this.level().getEntitiesOfClass(ZipperEntity.class, search)) {
                 if (found.size() >= MAX_CONNECTED_ZIPPERS) {
                     break;
@@ -374,64 +373,9 @@ public class ZipperEntity extends Entity {
             actual.add(new ZipperPathCell(zipperAnchor.getX(), zipperAnchor.getZ() * zSign));
         }
 
+        // Only render cells that still have a live zipper entity. Bridging gaps
+        // here made a removed middle zipper reappear as part of the merged artwork.
         Set<ZipperPathCell> path = new HashSet<>(actual);
-        int maxBridge = (int) Math.ceil(ZIPPER_LINK_DISTANCE + 1.0D);
-        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        for (ZipperPathCell cell : actual) {
-            for (int[] direction : directions) {
-                for (int distance = 1; distance <= maxBridge; distance++) {
-                    ZipperPathCell neighbor = new ZipperPathCell(
-                            cell.u() + direction[0] * distance,
-                            cell.v() + direction[1] * distance);
-                    if (actual.contains(neighbor)) {
-                        for (int step = 1; step < distance; step++) {
-                            path.add(new ZipperPathCell(cell.u() + direction[0] * step,
-                                    cell.v() + direction[1] * step));
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        while (true) {
-            List<Set<ZipperPathCell>> components = getPathComponents(path);
-            if (components.size() <= 1) {
-                break;
-            }
-            ZipperPathCell first = null;
-            ZipperPathCell second = null;
-            int bestDistance = Integer.MAX_VALUE;
-            for (ZipperPathCell a : actual) {
-                int componentA = findPathComponent(components, a);
-                for (ZipperPathCell b : actual) {
-                    if (findPathComponent(components, b) == componentA) {
-                        continue;
-                    }
-                    int distance = Math.abs(a.u() - b.u()) + Math.abs(a.v() - b.v());
-                    if (distance < bestDistance && distance <= maxBridge * 2) {
-                        first = a;
-                        second = b;
-                        bestDistance = distance;
-                    }
-                }
-            }
-            if (first == null || second == null) {
-                break;
-            }
-            int u = first.u();
-            int uStep = Integer.compare(second.u(), u);
-            while (u != second.u()) {
-                u += uStep;
-                path.add(new ZipperPathCell(u, first.v()));
-            }
-            int v = first.v();
-            int vStep = Integer.compare(second.v(), v);
-            while (v != second.v()) {
-                v += vStep;
-                path.add(new ZipperPathCell(second.u(), v));
-            }
-        }
 
         List<ZipperPathCell> relative = new ArrayList<>();
         for (ZipperPathCell cell : path) {
@@ -458,8 +402,8 @@ public class ZipperEntity extends Entity {
             int u = pos.getX() * localX.getStepX() + pos.getZ() * localX.getStepZ();
             actual.add(new ZipperPathCell(u, zipper.getBaseY()));
         }
+        // Keep this path limited to cells that still have a zipper entity.
         Set<ZipperPathCell> path = new HashSet<>(actual);
-        connectOrthogonalPath(actual, path);
         int originU = anchor.getX() * localX.getStepX() + anchor.getZ() * localX.getStepZ();
         List<ZipperPathCell> relative = new ArrayList<>();
         for (ZipperPathCell cell : path) {
@@ -467,95 +411,6 @@ public class ZipperEntity extends Entity {
         }
         relative.sort(Comparator.comparingInt(ZipperPathCell::u).thenComparingInt(ZipperPathCell::v));
         return relative;
-    }
-
-    private static void connectOrthogonalPath(Set<ZipperPathCell> actual, Set<ZipperPathCell> path) {
-        int maxBridge = (int) Math.ceil(ZIPPER_LINK_DISTANCE + 1.0D);
-        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        for (ZipperPathCell cell : actual) {
-            for (int[] direction : directions) {
-                for (int distance = 1; distance <= maxBridge; distance++) {
-                    ZipperPathCell neighbor = new ZipperPathCell(
-                            cell.u() + direction[0] * distance, cell.v() + direction[1] * distance);
-                    if (actual.contains(neighbor)) {
-                        for (int step = 1; step < distance; step++) {
-                            path.add(new ZipperPathCell(cell.u() + direction[0] * step,
-                                    cell.v() + direction[1] * step));
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        while (true) {
-            List<Set<ZipperPathCell>> components = getPathComponents(path);
-            if (components.size() <= 1) break;
-            ZipperPathCell first = null;
-            ZipperPathCell second = null;
-            int bestDistance = Integer.MAX_VALUE;
-            for (ZipperPathCell a : actual) {
-                int componentA = findPathComponent(components, a);
-                for (ZipperPathCell b : actual) {
-                    if (findPathComponent(components, b) == componentA) continue;
-                    int distance = Math.abs(a.u() - b.u()) + Math.abs(a.v() - b.v());
-                    if (distance < bestDistance && distance <= maxBridge * 2) {
-                        first = a;
-                        second = b;
-                        bestDistance = distance;
-                    }
-                }
-            }
-            if (first == null || second == null) break;
-            int u = first.u();
-            int uStep = Integer.compare(second.u(), u);
-            while (u != second.u()) {
-                u += uStep;
-                path.add(new ZipperPathCell(u, first.v()));
-            }
-            int v = first.v();
-            int vStep = Integer.compare(second.v(), v);
-            while (v != second.v()) {
-                v += vStep;
-                path.add(new ZipperPathCell(second.u(), v));
-            }
-        }
-    }
-
-    private static List<Set<ZipperPathCell>> getPathComponents(Set<ZipperPathCell> cells) {
-        List<Set<ZipperPathCell>> components = new ArrayList<>();
-        Set<ZipperPathCell> visited = new HashSet<>();
-        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        for (ZipperPathCell start : cells) {
-            if (!visited.add(start)) {
-                continue;
-            }
-            Set<ZipperPathCell> component = new HashSet<>();
-            List<ZipperPathCell> pending = new ArrayList<>();
-            component.add(start);
-            pending.add(start);
-            for (int index = 0; index < pending.size(); index++) {
-                ZipperPathCell current = pending.get(index);
-                for (int[] direction : directions) {
-                    ZipperPathCell neighbor = new ZipperPathCell(
-                            current.u() + direction[0], current.v() + direction[1]);
-                    if (cells.contains(neighbor) && visited.add(neighbor)) {
-                        component.add(neighbor);
-                        pending.add(neighbor);
-                    }
-                }
-            }
-            components.add(component);
-        }
-        return components;
-    }
-
-    private static int findPathComponent(List<Set<ZipperPathCell>> components, ZipperPathCell cell) {
-        for (int index = 0; index < components.size(); index++) {
-            if (components.get(index).contains(cell)) {
-                return index;
-            }
-        }
-        return -1;
     }
 
     public record ZipperPathCell(int u, int v) {}
@@ -594,20 +449,14 @@ public class ZipperEntity extends Entity {
             return false;
         }
 
-        double tangentX = dx - normalOffset * face.getStepX();
-        double tangentY = dy - normalOffset * face.getStepY();
-        double tangentZ = dz - normalOffset * face.getStepZ();
         Direction localX = face.getAxis() == Direction.Axis.Y ? Direction.EAST : face.getCounterClockWise();
-        double centerX = tangentX * localX.getStepX() + tangentZ * localX.getStepZ();
-        double centerY = face.getAxis() == Direction.Axis.Y
-                ? tangentZ * (face == Direction.UP ? -1.0D : 1.0D)
-                : tangentY;
-        boolean storage = source instanceof ZipperStorageEntity;
-        double halfWidthSum = 0.92D;
-        double length = storage ? 0.8D : face.getAxis() == Direction.Axis.Y ? 1.0D : 2.0D;
-        double gapX = Math.max(0.0D, Math.abs(centerX) - halfWidthSum);
-        double gapY = Math.max(0.0D, Math.abs(centerY) - length);
-        return gapX * gapX + gapY * gapY <= ZIPPER_LINK_DISTANCE * ZIPPER_LINK_DISTANCE;
+        int tangentU = dx * localX.getStepX() + dz * localX.getStepZ();
+        int tangentV = face.getAxis() == Direction.Axis.Y
+                ? dz * (face == Direction.UP ? -1 : 1)
+                : dy;
+        // Tile links are strictly one block to the side on the same surface.
+        // Distance-based links bridged empty cells and merged unrelated zippers.
+        return Math.abs(tangentU) + Math.abs(tangentV) == 1;
     }
 
     private static int mergeRenderPriority(ZipperEntity zipper) {
@@ -677,7 +526,8 @@ public class ZipperEntity extends Entity {
         if (face == Direction.DOWN) {
             return new Vec3(cx, anchor.getY() - 0.21D, cz);
         }
-        return new Vec3(cx + face.getStepX() * 0.51D, baseY, cz + face.getStepZ() * 0.51D);
+        return new Vec3(cx + face.getStepX() * 0.51D, baseY + 0.5D,
+                cz + face.getStepZ() * 0.51D);
     }
 
     public Vec3 getHidePos() {
@@ -917,14 +767,75 @@ public class ZipperEntity extends Entity {
         if (!this.level().isClientSide()) owner.hurtMarked = true;
     }
 
+    /** Leaves the zipper state at the player's current location, nudging only if their box is inside tunnel blocks. */
+    public static boolean exitOwnerAtCurrentPosition(Player owner) {
+        if (!(owner.level() instanceof ServerLevel serverLevel)) return false;
+
+        for (Entity entity : serverLevel.getAllEntities()) {
+            if (entity instanceof ZipperEntity zipper && zipper.getState() == STATE_HIDING
+                    && zipper.isOwner(owner)) {
+                zipper.endHiding(owner, findEmergencyExit(serverLevel, owner));
+                return true;
+            }
+        }
+        // Keep the player's current location. Only nudge them to the nearest
+        // adjacent clear spot if their bounding box is still inside tunnel cells.
+        exitOwnerFromZipperDimension(owner, findEmergencyExit(serverLevel, owner));
+        return true;
+    }
+
+    private static Vec3 findEmergencyExit(ServerLevel level, Player owner) {
+        Vec3 origin = owner.position();
+        AABB currentBox = owner.getBoundingBox();
+        if (!touchesZipperSpace(level, currentBox) && level.noCollision(owner, currentBox)) return origin;
+        for (int radius = 1; radius <= 12; radius++) {
+            Vec3 closestExit = null;
+            double closestDistance = Double.MAX_VALUE;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dy = -radius; dy <= radius; dy++) {
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        if (Math.max(Math.max(Math.abs(dx), Math.abs(dy)), Math.abs(dz)) != radius) continue;
+                        Vec3 candidate = origin.add(dx, dy, dz);
+                        AABB box = owner.getBoundingBox().move(candidate.subtract(owner.position()));
+                        if (touchesZipperSpace(level, box) || !level.noCollision(owner, box)) continue;
+                        double distance = candidate.distanceToSqr(origin);
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestExit = candidate;
+                        }
+                    }
+                }
+            }
+            if (closestExit != null) return closestExit;
+        }
+        return origin.add(0.0D, 8.0D, 0.0D);
+    }
+
+    private static boolean touchesZipperSpace(Level level, AABB bounds) {
+        BlockPos min = BlockPos.containing(bounds.minX, bounds.minY, bounds.minZ);
+        BlockPos max = BlockPos.containing(bounds.maxX, bounds.maxY, bounds.maxZ);
+        for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
+            if (level.getBlockState(pos).getBlock() instanceof ZipperSpaceBlock) return true;
+        }
+        return false;
+    }
+
     private void endHiding(Player owner) {
+        restoreHidingOwner(owner);
+        close();
+    }
+
+    private void restoreHidingOwner(Player owner) {
         if (owner != null) {
             if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(false);
+            owner.setInvisible(false);
+            owner.setNoGravity(false);
             owner.removeEffect(MobEffects.INVISIBILITY);
             owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             owner.removeEffect(MobEffects.JUMP);
             owner.removeEffect(MobEffects.MOVEMENT_SPEED);
             owner.setSwimming(savedWasSwimming);
+            owner.setPose(savedWasSwimming ? Pose.SWIMMING : Pose.STANDING);
             if (savedSpeedEffect != null) {
                 owner.addEffect(new MobEffectInstance(savedSpeedEffect));
             }
@@ -938,7 +849,6 @@ public class ZipperEntity extends Entity {
         }
         savedAbilities = false;
         savedSpeedEffect = null;
-        close();
     }
 
     private void endHiding(Player owner, Vec3 exit) {
@@ -972,11 +882,13 @@ public class ZipperEntity extends Entity {
         owner.fallDistance = 0.0F;
         owner.hurtMarked = true;
         if (owner instanceof IStickyFingersDismemberment state) state.roundabout$setInZipperDimension(false);
+        owner.setInvisible(false);
         owner.removeEffect(MobEffects.INVISIBILITY);
         owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
         owner.removeEffect(MobEffects.JUMP);
         owner.removeEffect(MobEffects.MOVEMENT_SPEED);
         owner.setSwimming(false);
+        owner.setPose(Pose.STANDING);
     }
 
     public static boolean canZip(Level level, BlockPos pos) {
@@ -1360,6 +1272,13 @@ public class ZipperEntity extends Entity {
     protected void serverTick() {
         holdSwallowed();
         tickStaggeredRelease();
+        int currentState = getState();
+        if (currentState != STATE_TUNNEL && currentState != STATE_CLOSING
+                && currentState != STATE_HIDING
+                && !canZipOnFace(this.level(), getAnchor(), getFace())) {
+            discard();
+            return;
+        }
         switch (getState()) {
             case STATE_NEUTRAL -> {
                 Player owner = getOwnerPlayer();
@@ -1551,9 +1470,7 @@ public class ZipperEntity extends Entity {
             if (getState() == STATE_HIDING) {
                 Player owner = getOwnerPlayer();
                 if (owner != null) {
-                    owner.removeEffect(MobEffects.INVISIBILITY);
-                    owner.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
-                    owner.removeEffect(MobEffects.JUMP);
+                    restoreHidingOwner(owner);
                 }
             }
         }

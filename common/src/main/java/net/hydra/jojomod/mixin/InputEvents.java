@@ -1406,11 +1406,6 @@ public abstract class InputEvents implements IInputEvents {
 
                 ((StandUser)player).roundabout$getStandPowers().visualFrameTick();
 
-                if (KeyInputRegistry.stickyUnzipConfigKey.consumeClick()
-                        && ((StandUser) player).roundabout$getStandPowers() instanceof PowersStickyFingers) {
-                    ClientUtil.openStickyFingersAutoUnzipScreen();
-                }
-
                 if (rdbt$isInitialized(player) && !((StandUser)player).roundabout$isDazed()
                 && !player.hasEffect(ModEffects.IMPRINTING)) {
                     KeyInputs.MoveKey1(player, ((Minecraft) (Object) this), roundabout$sameKeyOne(KeyInputRegistry.abilityOneKey),

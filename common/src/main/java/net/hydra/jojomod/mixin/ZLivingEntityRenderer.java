@@ -388,13 +388,8 @@ public abstract class ZLivingEntityRenderer<T extends LivingEntity, M extends En
 //        if (roundabout$isRenderingYellowLines)
 //            return;
 
-        if (entity != Minecraft.getInstance().player && PowersStickyFingers.isInZipperDimension(entity)) {
-            ci.cancel();
-            return;
-        }
-
-        if (entity instanceof StandEntity stand && stand.getUser() != null
-                && PowersStickyFingers.isInZipperDimension(stand.getUser())) {
+        if (!(entity instanceof StandEntity) && entity != Minecraft.getInstance().player
+                && PowersStickyFingers.isInZipperDimension(entity)) {
             ci.cancel();
             return;
         }

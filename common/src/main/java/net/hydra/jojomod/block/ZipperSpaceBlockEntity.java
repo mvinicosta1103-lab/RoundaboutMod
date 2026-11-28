@@ -170,7 +170,8 @@ public class ZipperSpaceBlockEntity extends BlockEntity {
         }
 
         for (Entity entity : level.getEntitiesOfClass(Entity.class, new AABB(pos), candidate -> candidate.isAlive()
-                && !(candidate instanceof ZipperEntity) && !(candidate instanceof ZipperDebrisEntity))) {
+                && !(candidate instanceof ZipperEntity) && !(candidate instanceof ZipperDebrisEntity)
+                && isActuallyInsideClosingCell(candidate, pos))) {
             double x = mouth.getX() + 0.5D + face.getStepX() * (entity.getBbWidth() * 0.5D + 0.2D);
             double y = face == Direction.UP ? mouth.getY()
                     : face == Direction.DOWN ? mouth.getY() - entity.getBbHeight() : mouth.getY();
@@ -205,5 +206,15 @@ public class ZipperSpaceBlockEntity extends BlockEntity {
                     face.getStepZ() * 0.35D);
             entity.hurtMarked = true;
         }
+    }
+
+    /** Ignore entities whose bounding boxes only brush the portal from outside. */
+    private static boolean isActuallyInsideClosingCell(Entity entity, BlockPos pos) {
+        AABB bounds = entity.getBoundingBox();
+        double verticalOverlap = Math.min(bounds.maxY, pos.getY() + 1.0D)
+                - Math.max(bounds.minY, pos.getY());
+        return entity.getX() >= pos.getX() && entity.getX() < pos.getX() + 1.0D
+                && entity.getZ() >= pos.getZ() && entity.getZ() < pos.getZ() + 1.0D
+                && verticalOverlap > 0.35D;
     }
 }

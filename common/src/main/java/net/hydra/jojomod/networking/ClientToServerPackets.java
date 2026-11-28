@@ -5,6 +5,7 @@ import net.hydra.jojomod.access.IPlayerEntity;
 import net.hydra.jojomod.access.IPowersPlayer;
 import net.hydra.jojomod.block.GamblingTableBlockEntity;
 import net.hydra.jojomod.entity.ModEntities;
+import net.hydra.jojomod.entity.objects.ZipperEntity;
 import net.hydra.jojomod.entity.corpses.FallenMob;
 import net.hydra.jojomod.entity.zombie_minion.BaseMinion;
 import net.hydra.jojomod.event.index.Corpses;
@@ -19,6 +20,7 @@ import net.hydra.jojomod.menu.GamblingTableMenu;
 import net.hydra.jojomod.powers.power_types.PunchingGeneralPowers;
 import net.hydra.jojomod.sound.ModSounds;
 import net.hydra.jojomod.stand.powers.PowersKingCrimson;
+import net.hydra.jojomod.stand.powers.PowersStickyFingers;
 import net.hydra.jojomod.util.MainUtil;
 import net.hydra.jojomod.util.S2CPacketUtil;
 import net.hydra.jojomod.event.powers.DiverDownDisguiseService;
@@ -127,6 +129,13 @@ public class ClientToServerPackets {
                     server.execute(() -> {
                         StandUser powers = basicChecks(sender);
                         byte b = (byte) vargs[0];
+                        boolean stickyInvisibilityRecovery = powers.roundabout$getStandPowers()
+                                instanceof PowersStickyFingers && sender.isInvisible();
+                        if (b == PowersStickyFingers.UNZIP
+                                && (PowersStickyFingers.isInZipperDimension(sender) || stickyInvisibilityRecovery)) {
+                            ZipperEntity.exitOwnerAtCurrentPosition(sender);
+                            return;
+                        }
                         powers.roundabout$tryPower(b, true);
                     });
                 }

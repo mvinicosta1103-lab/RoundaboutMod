@@ -53,8 +53,9 @@ public final class ZipperDetachedLimbRenderer {
             String name = names[i];
             if (part == null || name == null || !isPhysicalPart(name) || entityLimbs.containsKey(name)) continue;
             int limbMask = partMaskForName(normalize(name));
-            int consumedMask = CONSUMED_LIMBS.getOrDefault(entity.getId(), 0);
             int stillMissing = PowersStickyFingers.getClientDismembermentMask(entity);
+            if ((stillMissing & limbMask) == 0) continue;
+            int consumedMask = CONSUMED_LIMBS.getOrDefault(entity.getId(), 0);
             consumedMask &= stillMissing;
             if (consumedMask == 0) CONSUMED_LIMBS.remove(entity.getId());
             else CONSUMED_LIMBS.put(entity.getId(), consumedMask);
@@ -81,6 +82,7 @@ public final class ZipperDetachedLimbRenderer {
     public static void renderWorld(PoseStack poseStack, float partialTick, Camera camera,
                                    MultiBufferSource buffers, ClientLevel level) {
         if (level == null) return;
+        capturePlayerLimbs(level);
         Vec3 cameraPos = camera.getPosition();
         long gameTime = level.getGameTime();
         renderGraftZipEffects(level, gameTime);
@@ -116,6 +118,20 @@ public final class ZipperDetachedLimbRenderer {
                         poseStack, buffers, packedLight);
             }
             if (entityEntry.getValue().isEmpty()) entityIterator.remove();
+        }
+    }
+
+    /** First-person rendering can skip the player's body renderer, so capture missing limbs here too. */
+    private static void capturePlayerLimbs(ClientLevel level) {
+        Minecraft minecraft = Minecraft.getInstance();
+        for (AbstractClientPlayer player : level.players()) {
+            if (PowersStickyFingers.getClientDismembermentMask(player) == 0) continue;
+            var renderer = minecraft.getEntityRenderDispatcher().getRenderer(player);
+            if (!(renderer instanceof PlayerRenderer playerRenderer)) continue;
+            PlayerModel<AbstractClientPlayer> model = playerRenderer.getModel();
+            ModelPart[] parts = {model.head, model.hat, model.leftArm, model.rightArm, model.leftLeg, model.rightLeg};
+            String[] names = {"head", "hat", "leftArm", "rightArm", "leftLeg", "rightLeg"};
+            capture(player, parts, names, player.getSkinTextureLocation());
         }
     }
 

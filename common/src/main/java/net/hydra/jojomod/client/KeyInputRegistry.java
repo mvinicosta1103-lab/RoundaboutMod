@@ -15,7 +15,6 @@ public class KeyInputRegistry {
     public static final String KEY_ABILITY_4 = "key.roundabout.ability.four";
     public static final String KEY_SUMMON_STAND = "key.roundabout.summon.stand";
     public static final String KEY_JOJO_MENU = "key.roundabout.menu";
-    public static final String KEY_STICKY_UNZIP_CONFIG = "key.roundabout.sticky_unzip_config";
     public static final String KEY_GUARD = "key.roundabout.bonus_guard";
     public static final String KEY_SWITCH_ROWS = "key.roundabout.switch_rows";
     public static final String KEY_SHOW_EXP = "key.roundabout.show_exp";
@@ -57,11 +56,6 @@ public class KeyInputRegistry {
             KeyInputRegistry.KEY_CATEGORY_JOJO
     );
 
-    public static final KeyMapping stickyUnzipConfigKey = new KeyMapping(
-            KeyInputRegistry.KEY_STICKY_UNZIP_CONFIG,
-            InputConstants.KEY_B,
-            KeyInputRegistry.KEY_CATEGORY_JOJO
-    );
     public static KeyMapping guardKey = new KeyMapping(
             KeyInputRegistry.KEY_GUARD,
             -1,

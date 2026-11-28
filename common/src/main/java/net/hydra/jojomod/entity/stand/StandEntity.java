@@ -5,6 +5,7 @@ import net.hydra.jojomod.block.ZipperSpaceBlockEntity;
 import net.hydra.jojomod.access.IGravityEntity;
 import net.hydra.jojomod.access.ILivingEntityAccess;
 import net.hydra.jojomod.access.NoVibrationEntity;
+import net.hydra.jojomod.access.IStickyFingersDismemberment;
 import net.hydra.jojomod.client.ClientUtil;
 import net.hydra.jojomod.entity.KingCrimsonCloneEntity;
 import net.hydra.jojomod.entity.objects.GrabbedMobSoul;
@@ -154,6 +155,10 @@ public abstract class StandEntity extends Mob implements NoVibrationEntity {
 
     @Override
     public boolean isInvisible() {
+        if (getUser() instanceof IStickyFingersDismemberment zipperState
+                && zipperState.roundabout$isInZipperDimension()) {
+            return true;
+        }
         if (PowerTypes.isExistentiallyElsewhere(getUser())) {
             if (!(this.level().isClientSide() && (ClientUtil.isPlayer(getUser())
             || !PowerTypes.isInADifferentExistence(getUser(),ClientUtil.getPlayer())))) {

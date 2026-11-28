@@ -192,9 +192,6 @@ public class PowersStickyFingers extends NewPunchingStand {
 
     @Override
     public void powerActivate(PowerContext context) {
-        if (isInZipperDimension(this.self) && context != PowerContext.SKILL_1_NORMAL) {
-            return;
-        }
         switch (context) {
             case SKILL_1_NORMAL -> {
                 unzipClient();
@@ -208,6 +205,9 @@ public class PowersStickyFingers extends NewPunchingStand {
 
             case SKILL_2_NORMAL -> primeFistClient();
             case SKILL_2_CROUCH -> releaseZippersClient();
+            case SKILL_2_GUARD -> {
+                if (this.self.level().isClientSide()) ClientUtil.openStickyFingersAutoUnzipScreen();
+            }
 
             case SKILL_3_NORMAL -> {
                 if (hasLatchedFist()) grappleClient();
@@ -247,8 +247,18 @@ public class PowersStickyFingers extends NewPunchingStand {
     }
 
     public void unzipClient() {
+        boolean zipperExit = isInZipperDimension(this.self);
+        boolean invisibleRecovery = this.self instanceof Player
+                && this.self.isInvisible();
+        if (zipperExit || invisibleRecovery) {
+            if (zipperExit) this.tryPower(UNZIP, true);
+            // Send Z even when the client-side zipper flag became stale; the
+            // server validates the Sticky Fingers state before forcing recovery.
+            tryPowerPacket(UNZIP);
+            return;
+        }
         // aiming at one of your open portals closes it, even while Unzip is on cooldown
-        if (isInZipperDimension(this.self) || !this.onCooldown(PowerIndex.SKILL_1)
+        if (!this.onCooldown(PowerIndex.SKILL_1)
                 || findAimedOpenPortal() != null) {
             this.tryPower(UNZIP, true);
             tryPowerPacket(UNZIP);
@@ -283,6 +293,12 @@ public class PowersStickyFingers extends NewPunchingStand {
             return;
         }
         boolean insideZipperDimension = isInZipperDimension(this.self);
+        if (insideZipperDimension) {
+            if (!this.self.level().isClientSide() && this.self instanceof Player player) {
+                ZipperEntity.exitOwnerAtCurrentPosition(player);
+            }
+            return;
+        }
         // Keep the exit zipper within normal reach. The old 64-block range could
         // place an exit far away and then teleport the user to that distant block.
         double range = UNZIP_RANGE;
@@ -316,7 +332,9 @@ public class PowersStickyFingers extends NewPunchingStand {
             return;
         }
         playZipperCollapseAnimation();
-        int baseY = Mth.floor(blockHit.getLocation().y - 0.5D);
+        // Keep the segment on the block that was actually hit. Deriving this
+        // from the hit point's midpoint shifted lower hits onto the block below.
+        int baseY = anchor.getY();
 
         ZipperEntity zipper = ZipperEntity.create(level, this.self, anchor, face, baseY);
         level.addFreshEntity(zipper);
@@ -330,14 +348,6 @@ public class PowersStickyFingers extends NewPunchingStand {
                 serverLevel.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, surface),
                         pos.x, pos.y + 1.0D, pos.z, 16, 0.3D, 0.6D, 0.3D, 0.05D);
             }
-        }
-        if (insideZipperDimension && this.self instanceof Player player) {
-            Vec3 exit = zipper.computeSurfacePos().add(face.getStepX() * 0.30D,
-                    face.getStepY() * 0.30D, face.getStepZ() * 0.30D);
-            if (face == Direction.DOWN) {
-                exit = exit.add(0.0D, -Math.max(0.0D, player.getBbHeight() - 0.30D), 0.0D);
-            }
-            ZipperEntity.exitOwnerFromZipperDimension(player, exit);
         }
     }
 
@@ -764,7 +774,12 @@ public class PowersStickyFingers extends NewPunchingStand {
         }
         if (zipperUseButtonWasDown) return;
         zipperUseButtonWasDown = true;
-        if (isInZipperDimension(this.self)) return;
+        if (isInZipperDimension(this.self)) {
+            // M2 is an explicit exit control while inside; do not rely on the
+            // invisible tunnel block receiving a world interaction raycast.
+            unzipClient();
+            return;
+        }
         if (keyIsDown && fistPrimed) {
             cancelPrimedFistClient();
             return;
@@ -2212,9 +2227,11 @@ public class PowersStickyFingers extends NewPunchingStand {
             setSkillIcon(context, x, y, 1, StandIcons.STICKY_FINGERS_UNZIP_SKILL, PowerIndex.SKILL_1);
         }
 
-        if (sneaking) {
+        if (guarding) {
+            setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_LIMB_GRAFT, PowerIndex.SKILL_2_GUARD);
+        } else if (sneaking) {
             setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_ZIPPER_MASS, PowerIndex.SKILL_2_SNEAK);
-        } else if (!guarding) {
+        } else {
             setSkillIcon(context, x, y, 2, StandIcons.STICKY_FINGERS_FIST_LAUNCH_SKILL, PowerIndex.SKILL_2);
         }
 
@@ -2288,7 +2305,8 @@ public class PowersStickyFingers extends NewPunchingStand {
         list.add(drawSingleGUIIcon(context, 18, c6, r0, 0, "ability.roundabout.zipper_pole_collapse",
                 "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_POLE_COLLAPSE, 4, level, bypass));
         list.add(drawSingleGUIIcon(context, 18, c6, r1, 0, "ability.roundabout.zipper_auto_unzip",
-                "instruction.roundabout.key_b", StandIcons.STICKY_FINGERS_LIMB_GRAFT, 0, level, bypass));
+                "instruction.roundabout.press_skill_block", StandIcons.STICKY_FINGERS_LIMB_GRAFT,
+                2, level, bypass));
         return list;
     }
 }

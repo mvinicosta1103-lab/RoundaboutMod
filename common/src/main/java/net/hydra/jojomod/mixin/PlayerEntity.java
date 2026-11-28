@@ -2160,8 +2160,7 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
     @Inject(method = "interactOn(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", at=@At("HEAD"), cancellable = true)
     private void roundabout$interactOn(Entity $$0, InteractionHand $$1, CallbackInfoReturnable<InteractionResult> cir)
     {
-        if (PowersStickyFingers.isInZipperDimension((Player) (Object) this)
-                || PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) {
+        if (PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) {
             cir.setReturnValue(InteractionResult.FAIL);
             return;
         }
@@ -2192,8 +2191,7 @@ public abstract class PlayerEntity extends LivingEntity implements IPlayerEntity
     @Inject(method = "attack", at=@At("HEAD"), cancellable = true)
     private void roundabout$attack(Entity $$0, CallbackInfo ci)
     {
-        if (PowersStickyFingers.isInZipperDimension((Player) (Object) this)
-                || PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) {
+        if (PowersStickyFingers.hasBothArmsRemoved((Player) (Object) this)) {
             ci.cancel();
             return;
         }

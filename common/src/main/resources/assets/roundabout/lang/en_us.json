@@ -6252,11 +6252,10 @@
 
   "ability.roundabout.zipper_limb_graft": "Limb Graft",
   "ability.roundabout.zipper_limb_graft.desc": "Right-click while aiming at a dropped limb to attach a matching missing arm or leg. The graft uses the Sticky Fingers user's own model, gains a zipper effect and donor traits, and does not duplicate the donor part.",
-  "key.roundabout.sticky_unzip_config": "Sticky Fingers auto unzip settings",
   "ability.roundabout.zipper_latch": "Latch Zipper",
   "ability.roundabout.zipper_latch.desc": "Sneak + Skill 3 on the ground places a launch zipper on a floor or wall. After its chime, touch or click it to ride the zipper quickly and carry nearby targets along.",
   "ability.roundabout.zipper_auto_unzip": "Auto Unzip Settings",
-  "ability.roundabout.zipper_auto_unzip.desc": "Press B to configure which parts Sticky Fingers attacks remove from targets while Zip Marking is enabled. This only affects targets, not you.",
+  "ability.roundabout.zipper_auto_unzip.desc": "Block + Skill 2 opens the settings for which parts Sticky Fingers removes from targets while Zip Marking is enabled. This only affects targets, not you.",
   "ability.roundabout.zipper_pole_collapse": "Zipper Pole Collapse",
   "ability.roundabout.zipper_pole_collapse.desc": "Block + Skill 4 connects zippers across a matching solid patch: up to 3 by 3 blocks on floors or 4 by 4 on walls. It opens and mines the connected patch in sequence, including a one-block-wide wall, and respects the stand griefing rule.",
   "roundabout.zipper.no_dropped_limb": "No detached limb is close enough",

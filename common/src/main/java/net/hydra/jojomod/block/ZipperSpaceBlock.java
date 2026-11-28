@@ -41,6 +41,10 @@ public class ZipperSpaceBlock extends BaseEntityBlock {
                                  InteractionHand hand, BlockHitResult hit) {
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (level.isClientSide()) return InteractionResult.SUCCESS;
+        if (PowersStickyFingers.isInZipperDimension(player)) {
+            return ZipperEntity.exitOwnerAtCurrentPosition(player)
+                    ? InteractionResult.CONSUME : InteractionResult.FAIL;
+        }
         AABB search = new AABB(pos).inflate(32.0D);
         for (ZipperEntity zipper : level.getEntitiesOfClass(ZipperEntity.class, search, ZipperEntity::isOpenPortal)) {
             if (zipper.forceClosePortal()) return InteractionResult.CONSUME;
@@ -71,7 +75,6 @@ public class ZipperSpaceBlock extends BaseEntityBlock {
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter getter, BlockPos pos, CollisionContext context) {
-        if (isInsideZipper(context)) return Shapes.empty();
         BlockState original = getOriginal(getter, pos);
         return original == null ? Shapes.block() : original.getShape(getter, pos, context);
     }
@@ -121,11 +124,13 @@ public class ZipperSpaceBlock extends BaseEntityBlock {
         double movementAlongFace = player.getDeltaMovement().x * face.getStepX()
                 + player.getDeltaMovement().y * face.getStepY()
                 + player.getDeltaMovement().z * face.getStepZ();
+        double currentSide = signedDistanceFromPortalCenter(player, pos, face, false);
+        double previousSide = signedDistanceFromPortalCenter(player, pos, face, true);
         if (zipperState.roundabout$isInZipperDimension()) {
-            if (movementAlongFace > 0.01D && isOnApproachSide(player, pos, face)) {
+            if (movementAlongFace > 0.01D && previousSide <= 0.0D && currentSide > 0.0D) {
                 zipperState.roundabout$setInZipperDimension(false);
             }
-        } else if (isOnApproachSide(player, pos, face) || wasOnApproachSide(player, pos, face)) {
+        } else if (movementAlongFace < -0.01D && previousSide > 0.0D && currentSide <= 0.0D) {
             zipperState.roundabout$setInZipperDimension(true);
         }
     }
@@ -151,11 +156,14 @@ public class ZipperSpaceBlock extends BaseEntityBlock {
         return isOnApproachSide(entity, relative, face);
     }
 
-    private static boolean wasOnApproachSide(Entity entity, BlockPos pos, Direction face) {
+    private static double signedDistanceFromPortalCenter(Entity entity, BlockPos pos, Direction face,
+                                                         boolean previousPosition) {
         Vec3 center = new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D);
-        Vec3 previousPosition = new Vec3(entity.xo, entity.yo, entity.zo)
-                .add(0.0D, entity.getBbHeight() * 0.5D, 0.0D);
-        return isOnApproachSide(entity, previousPosition.subtract(center), face);
+        Vec3 entityPosition = previousPosition
+                ? new Vec3(entity.xo, entity.yo, entity.zo)
+                : entity.position();
+        Vec3 relative = entityPosition.add(0.0D, entity.getBbHeight() * 0.5D, 0.0D).subtract(center);
+        return relative.x * face.getStepX() + relative.y * face.getStepY() + relative.z * face.getStepZ();
     }
 
     private static boolean isOnApproachSide(Entity entity, Vec3 relative, Direction face) {
